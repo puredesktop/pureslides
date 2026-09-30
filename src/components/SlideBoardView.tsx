@@ -314,6 +314,7 @@ export function SlideBoardView({
           >
             {verification.message}
           </VerifyBadge>
+          <Sep aria-hidden />
           <HtmlButton
             type="button"
             onClick={onHistory}
@@ -1181,18 +1182,47 @@ const StatusButton = styled.button`
  * The deck's verification, in people words: checked, being checked, or
  * which slides have overlapping text. Clicking measures every slide again.
  */
-const VerifyBadge = styled.button.attrs(chrome('toolbar-select'))<{
+/** The layout check, as quiet status: no box, a dot for its state, red only when it failed. */
+const VerifyBadge = styled.button.attrs(chrome('meta'))<{
   $state: 'verified' | 'checking' | 'failed'
 }>`
   && {
-    border-color: ${props =>
-      props.$state === 'failed' ? 'var(--platform-colors-danger)' : 'var(--pure-chrome-line)'};
-    border-style: ${props => (props.$state === 'checking' ? 'dashed' : 'solid')};
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: var(--pure-chrome-control-height);
+    padding: 0 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    font: inherit;
+    font-size: var(--pure-chrome-meta-size);
     color: ${props =>
       props.$state === 'failed' ? 'var(--platform-colors-danger)' : 'var(--pure-chrome-soft)'};
     cursor: pointer;
     white-space: nowrap;
   }
+  &&:hover { background: var(--pure-chrome-hover); }
+  &&::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: ${props =>
+      props.$state === 'failed'
+        ? 'var(--platform-colors-danger)'
+        : props.$state === 'checking'
+          ? 'var(--pure-chrome-line)'
+          : 'var(--platform-colors-success, #3d8a55)'};
+  }
+`
+
+/** A hairline between the toolbar's status and its actions. */
+const Sep = styled.span`
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--pure-chrome-line);
 `
 
 /** The slide's inspector: the platform's right sidebar. */
@@ -1497,8 +1527,9 @@ const Mono = styled.span.attrs(chrome('meta'))``
 
 const HtmlButton = styled.button.attrs(chrome('toolbar-control'))``
 
-const PresentButton = styled.button.attrs(chrome('toolbar-select'))`
-  cursor: pointer;
+/** A plain toolbar action like History and HTML; Export stays the one accent. */
+const PresentButton = styled.button.attrs(chrome('toolbar-control'))`
+  && { display: inline-flex; align-items: center; gap: 6px; }
 `
 
 /** The toolbar's one primary control: the accent's third and last appearance. */
