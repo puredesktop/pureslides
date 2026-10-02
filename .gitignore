@@ -3,3 +3,6 @@ dist/
 .swc/
 .project-data/sessions.json
 .parity/
+
+!/.project-data/
+!/.project-data/**

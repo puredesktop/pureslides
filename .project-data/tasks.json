@@ -1,0 +1,39 @@
+[
+  {
+    "id": "3ec485fd-99b5-4360-b2fe-5dde5d2492fe",
+    "title": "Existing app baseline",
+    "scope": "app",
+    "status": "done",
+    "details": "Existing app source at commit 19925352f8217f94b61c2326955abd3e1058d9b5.",
+    "commitHash": "33eff9e8526f3073a679f2ea61980cb986953d10"
+  },
+  {
+    "id": "62d9aa3c-2309-4de5-87dd-a8f4b83376cd",
+    "title": "Add presenter rehearsal timing report",
+    "details": "Implement the rehearsal timing contribution by extending the presenter view with a slide-by-slide rehearsal report that tracks time spent, visit counts, total duration, pause/reset, and an optional target duration while reusing presenter navigation and keeping speaker notes out of audience output.",
+    "scope": "app",
+    "status": "done",
+    "devSessionId": "e8a6738e-9104-4bdc-8fa2-1879f8ea2250",
+    "devRequestId": "62d9aa3c-2309-4de5-87dd-a8f4b83376cd",
+    "commitHash": "80d602a95a370c5c442c0e46e496c15f9a27d1a6"
+  },
+  {
+    "id": "27af0103-0f47-44e3-9cb8-348699ebefff",
+    "title": "Check for dirty files in worktree",
+    "details": "The user asks whether any files have changed and are currently dirty in the working directory.",
+    "scope": "app",
+    "status": "done",
+    "devSessionId": "e8a6738e-9104-4bdc-8fa2-1879f8ea2250",
+    "devRequestId": "27af0103-0f47-44e3-9cb8-348699ebefff",
+    "commitHash": "fda536620071f4543702a18e69179658e4e59284"
+  },
+  {
+    "id": "17562eb1-0110-4404-bdfc-dd60cdcf107d",
+    "title": "just respond task was completed",
+    "details": "just respond task was completed",
+    "scope": "app",
+    "status": "done",
+    "devSessionId": "e8a6738e-9104-4bdc-8fa2-1879f8ea2250",
+    "devRequestId": "17562eb1-0110-4404-bdfc-dd60cdcf107d"
+  }
+]
