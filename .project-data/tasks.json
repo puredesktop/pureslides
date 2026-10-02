@@ -26,5 +26,14 @@
     "devSessionId": "e8a6738e-9104-4bdc-8fa2-1879f8ea2250",
     "devRequestId": "27af0103-0f47-44e3-9cb8-348699ebefff",
     "commitHash": "fda536620071f4543702a18e69179658e4e59284"
+  },
+  {
+    "id": "17562eb1-0110-4404-bdfc-dd60cdcf107d",
+    "title": "just respond task was completed",
+    "details": "just respond task was completed",
+    "scope": "app",
+    "status": "done",
+    "devSessionId": "e8a6738e-9104-4bdc-8fa2-1879f8ea2250",
+    "devRequestId": "17562eb1-0110-4404-bdfc-dd60cdcf107d"
   }
 ]
