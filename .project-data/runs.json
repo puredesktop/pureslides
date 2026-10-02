@@ -20,5 +20,17 @@
     "title": "Add presenter rehearsal timing report",
     "devSessionId": "e8a6738e-9104-4bdc-8fa2-1879f8ea2250",
     "devRequestId": "62d9aa3c-2309-4de5-87dd-a8f4b83376cd"
+  },
+  {
+    "createdAt": "2026-10-02T21:02:39.879Z",
+    "id": "27af0103-0f47-44e3-9cb8-348699ebefff",
+    "origin": "app",
+    "request": "is there any file changed that are dirty?",
+    "taskIds": [
+      "27af0103-0f47-44e3-9cb8-348699ebefff"
+    ],
+    "title": "Check for dirty files in worktree",
+    "devSessionId": "e8a6738e-9104-4bdc-8fa2-1879f8ea2250",
+    "devRequestId": "27af0103-0f47-44e3-9cb8-348699ebefff"
   }
 ]
