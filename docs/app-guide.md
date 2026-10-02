@@ -17,6 +17,10 @@ An HTML presentation workspace for writing decks, arranging slides, and presenti
 2. Use the board and presentation views to check layout, slide order, and builds.
 3. Save the editable deck and use export controls for PDF, images, or video. Export availability depends on the host environment.
 
+### Present and rehearse
+
+Open presentation from the slide board and press **S** to switch between the audience view and presenter view. Presenter view includes the next-slide preview, speaker notes, and a rehearsal timing report. The report records time spent and visits for each slide, excludes paused time, and shows the total rehearsal duration. Use **Pause/Resume** or **Reset** in the report; an optional target can be entered in minutes. These controls and notes are presenter-only and are never rendered to the audience.
+
 ## Development and loading
 
 We welcome **developers and vibecoders alike**. [Create a developer account on puredesktop.ai](https://puredesktop.ai/developers), then use Claude Code, Codex, your own editor, or purefactory to develop this app or create a new one.

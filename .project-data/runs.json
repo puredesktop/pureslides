@@ -8,5 +8,17 @@
       "3ec485fd-99b5-4360-b2fe-5dde5d2492fe"
     ],
     "title": "Existing app baseline"
+  },
+  {
+    "createdAt": "2026-10-02T09:52:20.494Z",
+    "id": "62d9aa3c-2309-4de5-87dd-a8f4b83376cd",
+    "origin": "factory",
+    "request": "Implement this contribution in the current app version. Follow the repository instructions and keep changes focused.\n\n#22 Review your rehearsal timing slide by slide\nhttps://github.com/puredesktop/pureslides/issues/22\n\n## More improvements\n\n21. **Review your rehearsal timing slide by slide.** Extend the existing presenter view with a rehearsal timing report: time spent on each slide, visits and total duration, with pause/reset and an optional target duration. Reuse presenter navigation and keep ",
+    "taskIds": [
+      "62d9aa3c-2309-4de5-87dd-a8f4b83376cd"
+    ],
+    "title": "Add presenter rehearsal timing report",
+    "devSessionId": "e8a6738e-9104-4bdc-8fa2-1879f8ea2250",
+    "devRequestId": "62d9aa3c-2309-4de5-87dd-a8f4b83376cd"
   }
 ]
