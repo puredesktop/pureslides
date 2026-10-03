@@ -1,4 +1,8 @@
-import { EmbeddedVideoPreview, prepareEmbeddedVideoPreview, restoreEmbeddedVideoPreview } from '@purescience/platform-ui/components/assets/EmbeddedVideoPreview'
+import {
+  EmbeddedVideoPreview,
+  prepareEmbeddedVideoPreview,
+  restoreEmbeddedVideoPreview,
+} from '@purescience/platform-ui/components/assets/EmbeddedVideoPreview'
 /**
  * One slide, shown.
  *
@@ -14,7 +18,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { styled } from 'styled-components'
 import { shownSlideHtml } from '../lib/slideSeek'
 import { layoutReportFrom, type LayoutReport } from '../lib/deckVerification'
-import { deinlineAssetUrls, inlineAssetUrls, picturesOnly, type PreviewAssetMap } from '../lib/packageAssets'
+import {
+  deinlineAssetUrls,
+  inlineAssetUrls,
+  picturesOnly,
+  type PreviewAssetMap,
+} from '../lib/packageAssets'
 import type { DeckGeometry } from '../types'
 
 const NO_PREVIEWS: PreviewAssetMap = {}
@@ -33,6 +42,7 @@ export function SlideFrame({
   onPick,
   onEdit,
   onLayout,
+  onKeyDown,
 }: {
   html: string
   slide: number
@@ -54,13 +64,25 @@ export function SlideFrame({
    * frame.
    */
   live?: boolean
+  /** Presentation controls forwarded from the focused opaque slide iframe. */
+  onKeyDown?: (key: string) => void
   dropTarget?: boolean
-  onPick?: (path: string, label: string, additive: boolean, slide: number) => void
+  onPick?: (
+    path: string,
+    label: string,
+    additive: boolean,
+    slide: number,
+  ) => void
   /**
    * Typing in the slide itself: the edited element arrives serialized, with
    * the html this frame was showing — the version the edit was typed into.
    */
-  onEdit?: (slide: number, path: string, outerHtml: string, html: string) => void
+  onEdit?: (
+    slide: number,
+    path: string,
+    outerHtml: string,
+    html: string,
+  ) => void
   /**
    * What this frame measured after rendering: overlaps the fit could not
    * separate (a fault in the slide, not the view), whether the frame had
@@ -73,9 +95,15 @@ export function SlideFrame({
   const [ready, setReady] = useState(0)
   const scale = width / geometry.width
   // A frame that does not play a clip does not carry its bytes.
-  const shown = useMemo(() => (live ? previews : picturesOnly(previews)), [previews, live])
+  const shown = useMemo(
+    () => (live ? previews : picturesOnly(previews)),
+    [previews, live],
+  )
   const doc = useMemo(
-    () => prepareEmbeddedVideoPreview(shownSlideHtml(inlineAssetUrls(html, shown), slide, step)),
+    () =>
+      prepareEmbeddedVideoPreview(
+        shownSlideHtml(inlineAssetUrls(html, shown), slide, step),
+      ),
     [html, shown],
   )
   const highlightKey = highlight.join('|')
@@ -90,6 +118,7 @@ export function SlideFrame({
       const data = event.data as
         | {
             type?: string
+            key?: string
             path?: string
             label?: string
             additive?: boolean
@@ -101,12 +130,19 @@ export function SlideFrame({
             fontsSignature?: unknown
           }
         | undefined
+      if (data?.type === 'pureslides:key' && typeof data.key === 'string')
+        onKeyDown?.(data.key)
       if (data?.type === 'pureslides:ready') setReady(count => count + 1)
       if (data?.type === 'pureslides:layout') {
         onLayout?.(data.slide ?? 0, layoutReportFrom(data), html)
       }
       if (data?.type === 'pureslides:picked' && typeof data.path === 'string') {
-        onPick?.(data.path, data.label ?? '', !!data.additive, data.slideIndex ?? 0)
+        onPick?.(
+          data.path,
+          data.label ?? '',
+          !!data.additive,
+          data.slideIndex ?? 0,
+        )
       }
       if (
         data?.type === 'pureslides:edited' &&
@@ -118,20 +154,26 @@ export function SlideFrame({
         onEdit?.(
           data.slideIndex ?? 0,
           data.path,
-          restoreEmbeddedVideoPreview(deinlineAssetUrls((data as { outerHtml: string }).outerHtml, shown).html),
+          restoreEmbeddedVideoPreview(
+            deinlineAssetUrls((data as { outerHtml: string }).outerHtml, shown)
+              .html,
+          ),
           html,
         )
       }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [onPick, onEdit, onLayout, html, shown])
+  }, [onPick, onEdit, onLayout, onKeyDown, html, shown])
 
   // `ready` is in every dep list: a frame that has just loaded has not seen
   // anything sent before it existed.
   useEffect(() => {
     post({ type: 'pureslides:show', slide, step, live })
   }, [post, slide, step, live, ready])
+  useEffect(() => {
+    post({ type: 'pureslides:keyboard', on: !!onKeyDown })
+  }, [post, onKeyDown, ready])
   useEffect(() => {
     post({ type: 'pureslides:picking', on: picking })
   }, [post, picking, ready])
@@ -145,7 +187,10 @@ export function SlideFrame({
   }, [post, highlightKey, slide, scale, ready])
 
   return (
-    <Box data-video-drop-surface={dropTarget || undefined} style={{ width, height: geometry.height * scale }}>
+    <Box
+      data-video-drop-surface={dropTarget || undefined}
+      style={{ width, height: geometry.height * scale }}
+    >
       <Scene
         ref={frameRef}
         $interactive={picking || live}
@@ -160,7 +205,12 @@ export function SlideFrame({
           transform: `scale(${scale})`,
         }}
       />
-      <EmbeddedVideoPreview frame={frameRef} scale={scale} documentKey={doc} interactive={live && !picking} />
+      <EmbeddedVideoPreview
+        frame={frameRef}
+        scale={scale}
+        documentKey={doc}
+        interactive={live && !picking}
+      />
     </Box>
   )
 }
@@ -171,9 +221,7 @@ const Box = styled.span`
   overflow: hidden;
   background: #ffffff;
   /* A white slide on a light board has no edges of its own. */
-  box-shadow:
-    inset 0 0 0 1px rgb(0 0 0 / 0.16),
-    0 4px 14px rgb(18 18 22 / 0.1);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.16), 0 4px 14px rgb(18 18 22 / 0.1);
 `
 
 /**

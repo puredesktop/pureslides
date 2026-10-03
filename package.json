@@ -19,14 +19,15 @@
     "@purescience/platform-bridge": "file:../../packages/bridge"
   },
   "devDependencies": {
-    "@swc/plugin-styled-components": "^12.9.0",
+    "@swc/plugin-styled-components": "13.0.0",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "@vitejs/plugin-react-swc": "^3.10.2",
     "happy-dom": "^17.4.4",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@swc/core": "1.16.1"
   },
   "license": "MIT"
 }
