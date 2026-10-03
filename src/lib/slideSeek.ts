@@ -512,9 +512,19 @@ export function slideScript(slideIndex: number, step: number): string {
 
   ${PICKING}
 
+  var forwardKeyboard = false;
+  document.addEventListener('keydown', function (event) {
+    if (!forwardKeyboard || event.defaultPrevented) return;
+    var target = event.target;
+    if (target && target.closest && target.closest('input, textarea, select, [contenteditable]')) return;
+    if (!/^(?:[0-9]|Enter|ArrowRight|ArrowLeft|PageDown|PageUp|Home|End|Escape| |n|p|b|s|a|r|\\.)$/.test(event.key)) return;
+    event.preventDefault();
+    parent.postMessage({type:'pureslides:key',key:event.key}, '*');
+  });
   window.addEventListener('message', function (event) {
     var data = event && event.data;
     if (!data) return;
+    if (data.type === 'pureslides:keyboard') forwardKeyboard = data.on === true;
     if (data.type === 'pureslides:show') {
       if (typeof data.live === 'boolean') document.documentElement.setAttribute('data-live', String(data.live));
       window.__slideShow(data.slide, data.step);
