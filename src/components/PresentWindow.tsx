@@ -90,7 +90,13 @@ export function PresentWindow({
   // Opening starts the clock and the deck; closing hands the position back.
   useEffect(() => {
     if (!open) return
-    setAt({ slide: from, step: 0 })
+    setAt({
+      slide: Number.isFinite(from)
+        ? Math.max(0, Math.min(Math.floor(from), slides.length - 1))
+        : 0,
+      step: 0,
+    })
+    jump.current = ''
     setBlacked(false)
     setStartedAt(performance.now())
     setNow(performance.now())
@@ -111,7 +117,7 @@ export function PresentWindow({
       /* refused, or already fullscreen — the overlay still covers the app */
     })
     return () => {
-      if (document.fullscreenElement) {
+      if (document.fullscreenElement === target) {
         void document.exitFullscreen?.().catch(() => {})
       }
     }
@@ -138,47 +144,55 @@ export function PresentWindow({
     if (open) onPositionChange?.(at.slide)
   }, [open, at.slide, onPositionChange])
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (event: KeyboardEvent): void => {
-      const key = event.key
+  const handleKey = useCallback(
+    (key: string): boolean => {
+      if (!open) return false
       if (/^[0-9]$/.test(key)) {
         jump.current += key
-        return
+        return true
       }
       if (key === 'Enter' && jump.current) {
         const wanted = Number(jump.current) - 1
         jump.current = ''
-        if (wanted >= 0 && wanted < slides.length) setAt({ slide: wanted, step: 0 })
-        return
+        if (wanted >= 0 && wanted < slides.length)
+          setAt({ slide: wanted, step: 0 })
+        return true
       }
       jump.current = ''
-      if (key === 'ArrowRight' || key === ' ' || key === 'PageDown' || key === 'n') {
-        event.preventDefault()
-        go(1)
-      } else if (key === 'ArrowLeft' || key === 'PageUp' || key === 'p') {
-        event.preventDefault()
-        go(-1)
-      } else if (key === 'Home') {
-        setAt({ slide: 0, step: 0 })
-      } else if (key === 'End') {
+      if (['ArrowRight', ' ', 'PageDown', 'n'].includes(key)) go(1)
+      else if (['ArrowLeft', 'PageUp', 'p'].includes(key)) go(-1)
+      else if (key === 'Home') setAt({ slide: 0, step: 0 })
+      else if (key === 'End') {
         const last = Math.max(0, slides.length - 1)
         setAt({ slide: last, step: slides[last]?.steps ?? 0 })
-      } else if (key === 'b' || key === '.') {
-        setBlacked(black => !black)
-      } else if (key === 's') {
-        setPresenter(view => !view)
-      } else if (key === 'a') {
-        setArrows(shown => !shown)
-      } else if (key === 'r') {
-        setStartedAt(performance.now())
-      } else if (key === 'Escape') {
-        onClose()
-      }
+      } else if (key === 'b' || key === '.') setBlacked(black => !black)
+      else if (key === 's') setPresenter(view => !view)
+      else if (key === 'a') setArrows(shown => !shown)
+      else if (key === 'r') setStartedAt(performance.now())
+      else if (key === 'Escape') onClose()
+      else return false
+      return true
+    },
+    [open, go, slides, onClose],
+  )
+  useEffect(() => {
+    if (!open) return
+    const onKey = (event: KeyboardEvent) => {
+      if (handleKey(event.key)) event.preventDefault()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, go, slides, onClose])
+  }, [open, handleKey])
+  useEffect(() => {
+    if (!open) return
+    setAt(position => {
+      const slide = Math.max(0, Math.min(position.slide, slides.length - 1))
+      const step = Math.min(position.step, slides[slide]?.steps ?? 0)
+      return slide === position.slide && step === position.step
+        ? position
+        : { slide, step }
+    })
+  }, [open, slides])
 
   // The chrome gets out of the way once the room settles.
   useEffect(() => {
@@ -204,7 +218,9 @@ export function PresentWindow({
     const measure = (): void => {
       const box = stageRef.current?.getBoundingClientRect()
       if (!box) return
-      setScale(Math.min(box.width / geometry.width, box.height / geometry.height))
+      setScale(
+        Math.min(box.width / geometry.width, box.height / geometry.height),
+      )
     }
     measure()
     window.addEventListener('resize', measure)
@@ -213,7 +229,9 @@ export function PresentWindow({
 
   const elapsed = useMemo(() => {
     const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
-    return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+    return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(
+      seconds % 60,
+    ).padStart(2, '0')}`
   }, [now, startedAt])
 
   if (!open || !current) return null
@@ -225,7 +243,9 @@ export function PresentWindow({
       {presenter ? (
         <Presenter>
           <PresenterMain>
-            <Label>Now · slide {at.slide + 1} of {slides.length}</Label>
+            <Label>
+              Now · slide {at.slide + 1} of {slides.length}
+            </Label>
             <PresenterStage ref={stageRef}>
               <SlideFrame
                 html={html}
@@ -235,6 +255,7 @@ export function PresentWindow({
                 width={geometry.width * scale}
                 previews={previews}
                 live
+                onKeyDown={handleKey}
               />
             </PresenterStage>
             <Bars>
@@ -269,7 +290,11 @@ export function PresentWindow({
               <Elapsed>{elapsed}</Elapsed>
               <Label>elapsed</Label>
               <span style={{ flex: 1 }} />
-              {steps ? <Label>step {at.step} of {steps}</Label> : null}
+              {steps ? (
+                <Label>
+                  step {at.step} of {steps}
+                </Label>
+              ) : null}
             </Clock>
           </PresenterSide>
         </Presenter>
@@ -284,6 +309,7 @@ export function PresentWindow({
               width={geometry.width * scale}
               previews={previews}
               live
+              onKeyDown={handleKey}
             />
           )}
         </Stage>
@@ -473,7 +499,8 @@ const Dot = styled.span<{ $on: boolean }>`
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: ${props => (props.$on ? 'rgb(255 255 255 / 0.7)' : 'transparent')};
+  background: ${props =>
+    props.$on ? 'rgb(255 255 255 / 0.7)' : 'transparent'};
   border: 1px solid rgb(255 255 255 / 0.4);
 `
 

@@ -5,6 +5,7 @@
  * state as it is now rather than as it was when the drawer opened.
  */
 import { useRef } from 'react'
+import type { AgentToolHandler } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import { usePlatformAgentTools } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import {
   AgentDeckToolError,
@@ -46,85 +47,112 @@ import {
   updateSlideHandler,
 } from '../agents/handlers'
 
+const READ_ONLY_TOOLS = new Set([
+  'getDeckContext',
+  'getSlide',
+  'listSlides',
+  'listAssets',
+  'checkDeck',
+  'listBlocks',
+  'getDrawerRequest',
+  'listRevisions',
+  'stopExport',
+])
+
 export function usePureSlidesAgentTools(
   ready: boolean,
   context: DeckAgentToolContext,
+  mayChangeDeck: () => boolean = () => true,
 ): void {
   const contextRef = useRef(context)
   contextRef.current = context
+  const mayChangeRef = useRef(mayChangeDeck)
+  mayChangeRef.current = mayChangeDeck
 
+  const handlers: Record<string, AgentToolHandler> = {
+    cancelDrawerRequest: async invoke => ({
+      content: JSON.stringify(
+        await contextRef.current.cancelDrawerRequest(invoke.arguments ?? {}),
+      ),
+    }),
+    getDeckContext: async () => getDeckContextHandler(contextRef.current),
+    getSlide: async invoke =>
+      getSlideHandler(contextRef.current, invoke.arguments ?? {}),
+    listSlides: async () => listSlidesHandler(contextRef.current),
+    listAssets: async () => listAssetsHandler(contextRef.current),
+    checkDeck: async () => checkDeckHandler(contextRef.current),
+    createDeck: async invoke =>
+      createDeckHandler(contextRef.current, invoke.arguments ?? {}),
+    setDeck: async invoke =>
+      setDeckHandler(contextRef.current, invoke.arguments ?? {}),
+    addSlide: async invoke =>
+      addSlideHandler(contextRef.current, invoke.arguments ?? {}),
+    updateSlide: async invoke =>
+      updateSlideHandler(contextRef.current, invoke.arguments ?? {}),
+    setSlideHtml: async invoke =>
+      setSlideHtmlHandler(contextRef.current, invoke.arguments ?? {}),
+    moveSlide: async invoke =>
+      moveSlideHandler(contextRef.current, invoke.arguments ?? {}),
+    duplicateSlide: async invoke =>
+      duplicateSlideHandler(contextRef.current, invoke.arguments ?? {}),
+    deleteSlide: async invoke =>
+      deleteSlideHandler(contextRef.current, invoke.arguments ?? {}),
+    setElement: async invoke =>
+      setElementHandler(contextRef.current, invoke.arguments ?? {}),
+    setElementText: async invoke =>
+      setElementTextHandler(contextRef.current, invoke.arguments ?? {}),
+    listBlocks: async () => listBlocksHandler(contextRef.current),
+    addBlock: async invoke =>
+      addBlockHandler(contextRef.current, invoke.arguments ?? {}),
+    deleteElement: async invoke =>
+      deleteElementHandler(contextRef.current, invoke.arguments ?? {}),
+    setElementStep: async invoke =>
+      setElementStepHandler(contextRef.current, invoke.arguments ?? {}),
+    addAsset: async invoke =>
+      addAssetHandler(contextRef.current, invoke.arguments ?? {}),
+    setAssetRole: async invoke =>
+      setAssetRoleHandler(contextRef.current, invoke.arguments ?? {}),
+    describeAsset: async invoke =>
+      describeAssetHandler(contextRef.current, invoke.arguments ?? {}),
+    setBrief: async invoke =>
+      setBriefHandler(contextRef.current, invoke.arguments ?? {}),
+    getDrawerRequest: async () => ({
+      content: JSON.stringify(await contextRef.current.getDrawerRequest()),
+    }),
+    commitDrawerRequest: async invoke => ({
+      content: JSON.stringify(
+        await contextRef.current.commitDrawerRequest(invoke.arguments ?? {}),
+      ),
+    }),
+    draftDeck: async () => draftDeckHandler(contextRef.current),
+    setSelection: async invoke =>
+      setSelectionHandler(contextRef.current, invoke.arguments ?? {}),
+    present: async invoke =>
+      presentHandler(contextRef.current, invoke.arguments ?? {}),
+    saveDeck: async () => saveDeckHandler(contextRef.current),
+    exportDeck: async invoke =>
+      exportDeckHandler(contextRef.current, invoke.arguments ?? {}),
+    stopExport: async () => stopExportHandler(contextRef.current),
+    listRevisions: async () => listRevisionsHandler(contextRef.current),
+    restoreRevision: async invoke =>
+      restoreRevisionHandler(contextRef.current, invoke.arguments ?? {}),
+  }
   usePlatformAgentTools({
     ready,
     tools: PURESLIDES_AGENT_TOOLS,
     logLabel: PURESLIDES_AGENT_LOG_LABEL,
     errorType: AgentDeckToolError,
-    handlers: {
-      cancelDrawerRequest: async invoke => ({
-        content: JSON.stringify(
-          await contextRef.current.cancelDrawerRequest(invoke.arguments ?? {}),
-        ),
-      }),
-      getDeckContext: async () => getDeckContextHandler(contextRef.current),
-      getSlide: async invoke =>
-        getSlideHandler(contextRef.current, invoke.arguments ?? {}),
-      listSlides: async () => listSlidesHandler(contextRef.current),
-      listAssets: async () => listAssetsHandler(contextRef.current),
-      checkDeck: async () => checkDeckHandler(contextRef.current),
-      createDeck: async invoke =>
-        createDeckHandler(contextRef.current, invoke.arguments ?? {}),
-      setDeck: async invoke =>
-        setDeckHandler(contextRef.current, invoke.arguments ?? {}),
-      addSlide: async invoke =>
-        addSlideHandler(contextRef.current, invoke.arguments ?? {}),
-      updateSlide: async invoke =>
-        updateSlideHandler(contextRef.current, invoke.arguments ?? {}),
-      setSlideHtml: async invoke =>
-        setSlideHtmlHandler(contextRef.current, invoke.arguments ?? {}),
-      moveSlide: async invoke =>
-        moveSlideHandler(contextRef.current, invoke.arguments ?? {}),
-      duplicateSlide: async invoke =>
-        duplicateSlideHandler(contextRef.current, invoke.arguments ?? {}),
-      deleteSlide: async invoke =>
-        deleteSlideHandler(contextRef.current, invoke.arguments ?? {}),
-      setElement: async invoke =>
-        setElementHandler(contextRef.current, invoke.arguments ?? {}),
-      setElementText: async invoke =>
-        setElementTextHandler(contextRef.current, invoke.arguments ?? {}),
-      listBlocks: async () => listBlocksHandler(contextRef.current),
-      addBlock: async invoke =>
-        addBlockHandler(contextRef.current, invoke.arguments ?? {}),
-      deleteElement: async invoke =>
-        deleteElementHandler(contextRef.current, invoke.arguments ?? {}),
-      setElementStep: async invoke =>
-        setElementStepHandler(contextRef.current, invoke.arguments ?? {}),
-      addAsset: async invoke =>
-        addAssetHandler(contextRef.current, invoke.arguments ?? {}),
-      setAssetRole: async invoke =>
-        setAssetRoleHandler(contextRef.current, invoke.arguments ?? {}),
-      describeAsset: async invoke =>
-        describeAssetHandler(contextRef.current, invoke.arguments ?? {}),
-      setBrief: async invoke =>
-        setBriefHandler(contextRef.current, invoke.arguments ?? {}),
-      getDrawerRequest: async () => ({
-        content: JSON.stringify(await contextRef.current.getDrawerRequest()),
-      }),
-      commitDrawerRequest: async invoke => ({
-        content: JSON.stringify(
-          await contextRef.current.commitDrawerRequest(invoke.arguments ?? {}),
-        ),
-      }),
-      draftDeck: async () => draftDeckHandler(contextRef.current),
-      setSelection: async invoke =>
-        setSelectionHandler(contextRef.current, invoke.arguments ?? {}),
-      present: async invoke =>
-        presentHandler(contextRef.current, invoke.arguments ?? {}),
-      saveDeck: async () => saveDeckHandler(contextRef.current),
-      exportDeck: async invoke =>
-        exportDeckHandler(contextRef.current, invoke.arguments ?? {}),
-      stopExport: async () => stopExportHandler(contextRef.current),
-      listRevisions: async () => listRevisionsHandler(contextRef.current),
-      restoreRevision: async invoke =>
-        restoreRevisionHandler(contextRef.current, invoke.arguments ?? {}),
-    },
+    handlers: Object.fromEntries(
+      Object.entries(handlers).map(([name, handler]) => [
+        name,
+        async invoke => {
+          if (!READ_ONLY_TOOLS.has(name) && !mayChangeRef.current())
+            throw new AgentDeckToolError(
+              'Wait for the deck to finish opening, then read getDeckContext again before changing it.',
+            )
+          return handler(invoke)
+        },
+      ]),
+    ),
   })
 }
