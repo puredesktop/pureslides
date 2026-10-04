@@ -18,12 +18,18 @@
  * settles, and on-screen arrows are there for a touchscreen or a lectern
  * mouse — off by default, because a keyboard is the real instrument.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { styled } from 'styled-components'
 import { SlideFrame } from './SlideFrame'
 import type { DeckGeometry } from '../types'
 import type { Slide } from '../lib/slides'
 import type { PreviewAssetMap } from '../lib/packageAssets'
+import {
+  createRehearsal,
+  formatDuration,
+  rehearsalReducer,
+  rehearsalReport,
+} from '../lib/rehearsal'
 
 interface PresentWindowProps {
   open: boolean
@@ -53,11 +59,18 @@ export function PresentWindow({
   const [arrows, setArrows] = useState(false)
   const [blacked, setBlacked] = useState(false)
   const [idle, setIdle] = useState(false)
-  const [startedAt, setStartedAt] = useState(() => 0)
   const [now, setNow] = useState(0)
+  const [targetInput, setTargetInput] = useState('')
+  const [rehearsal, dispatchRehearsal] = useReducer(
+    rehearsalReducer,
+    null,
+    () => createRehearsal(slides.length, from, performance.now()),
+  )
   const stageRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(0.5)
   const jump = useRef('')
+  const pendingRehearsalStart = useRef<number | null>(null)
+  const trackedSlide = useRef<number | null>(null)
 
   const current = slides[at.slide]
   const steps = current?.steps ?? 0
@@ -90,17 +103,35 @@ export function PresentWindow({
   // Opening starts the clock and the deck; closing hands the position back.
   useEffect(() => {
     if (!open) return
-    setAt({
-      slide: Number.isFinite(from)
-        ? Math.max(0, Math.min(Math.floor(from), slides.length - 1))
-        : 0,
-      step: 0,
-    })
+    const start = Number.isFinite(from)
+      ? Math.max(0, Math.min(Math.floor(from), slides.length - 1))
+      : 0
+    setAt({ slide: start, step: 0 })
     jump.current = ''
     setBlacked(false)
-    setStartedAt(performance.now())
-    setNow(performance.now())
-  }, [open, from])
+    const started = performance.now()
+    pendingRehearsalStart.current = start
+    trackedSlide.current = null
+    dispatchRehearsal({ type: 'reset', slide: start, slideCount: slides.length, now: started })
+    setTargetInput('')
+    setNow(started)
+  }, [open, from, slides.length])
+
+  // The presenter and audience share navigation. Track a slide only after the
+  // opening position has landed, so reopening from a different board selection
+  // does not count the stale position from the previous session as a visit.
+  useEffect(() => {
+    if (!open) return
+    if (pendingRehearsalStart.current !== null) {
+      if (at.slide !== pendingRehearsalStart.current) return
+      pendingRehearsalStart.current = null
+      trackedSlide.current = at.slide
+      return
+    }
+    if (trackedSlide.current === at.slide) return
+    trackedSlide.current = at.slide
+    dispatchRehearsal({ type: 'slide', slide: at.slide, now: performance.now() })
+  }, [open, at.slide])
 
   /**
    * Take the whole display, and give it back.
@@ -168,16 +199,21 @@ export function PresentWindow({
       } else if (key === 'b' || key === '.') setBlacked(black => !black)
       else if (key === 's') setPresenter(view => !view)
       else if (key === 'a') setArrows(shown => !shown)
-      else if (key === 'r') setStartedAt(performance.now())
+      else if (key === 'r') {
+        const resetAt = performance.now()
+        dispatchRehearsal({ type: 'reset', slide: at.slide, slideCount: slides.length, now: resetAt })
+        setNow(resetAt)
+      }
       else if (key === 'Escape') onClose()
       else return false
       return true
     },
-    [open, go, slides, onClose],
+    [open, go, slides, onClose, at.slide],
   )
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' && event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]')) return
       if (handleKey(event.key)) event.preventDefault()
     }
     window.addEventListener('keydown', onKey)
@@ -193,6 +229,7 @@ export function PresentWindow({
         : { slide, step }
     })
   }, [open, slides])
+
 
   // The chrome gets out of the way once the room settles.
   useEffect(() => {
@@ -227,12 +264,11 @@ export function PresentWindow({
     return () => window.removeEventListener('resize', measure)
   }, [open, presenter, geometry.width, geometry.height])
 
-  const elapsed = useMemo(() => {
-    const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
-    return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(
-      seconds % 60,
-    ).padStart(2, '0')}`
-  }, [now, startedAt])
+  const report = useMemo(() => rehearsalReport(rehearsal, now), [rehearsal, now])
+  const targetMilliseconds = useMemo(() => {
+    const minutes = Number(targetInput)
+    return Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : null
+  }, [targetInput])
 
   if (!open || !current) return null
 
@@ -287,8 +323,8 @@ export function PresentWindow({
               <Notes>{current.notes || 'No notes for this slide.'}</Notes>
             </NotesBlock>
             <Clock>
-              <Elapsed>{elapsed}</Elapsed>
-              <Label>elapsed</Label>
+              <Elapsed>{formatDuration(report.totalMilliseconds)}</Elapsed>
+              <Label>{rehearsal.paused ? 'paused' : 'rehearsal total'}</Label>
               <span style={{ flex: 1 }} />
               {steps ? (
                 <Label>
@@ -296,6 +332,73 @@ export function PresentWindow({
                 </Label>
               ) : null}
             </Clock>
+            <RehearsalBlock>
+              <RehearsalHeader>
+                <Label>Timing report</Label>
+                <RehearsalActions>
+                  <RehearsalButton
+                    type="button"
+                    onClick={() => {
+                      const action = rehearsal.paused ? 'resume' : 'pause'
+                      const changedAt = performance.now()
+                      dispatchRehearsal({ type: action, now: changedAt })
+                      setNow(changedAt)
+                    }}
+                  >
+                    {rehearsal.paused ? 'Resume' : 'Pause'}
+                  </RehearsalButton>
+                  <RehearsalButton
+                    type="button"
+                    onClick={() => {
+                      const resetAt = performance.now()
+                      dispatchRehearsal({ type: 'reset', slide: at.slide, slideCount: slides.length, now: resetAt })
+                      setNow(resetAt)
+                    }}
+                  >
+                    Reset
+                  </RehearsalButton>
+                </RehearsalActions>
+              </RehearsalHeader>
+              <TargetRow>
+                <TargetLabel htmlFor="rehearsal-target">Target (minutes)</TargetLabel>
+                <TargetInput
+                  id="rehearsal-target"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  inputMode="decimal"
+                  placeholder="optional"
+                  value={targetInput}
+                  onChange={event => setTargetInput(event.currentTarget.value)}
+                />
+                {targetMilliseconds !== null ? (
+                  <TargetStatus $over={report.totalMilliseconds > targetMilliseconds}>
+                    {report.totalMilliseconds > targetMilliseconds
+                      ? `+${formatDuration(report.totalMilliseconds - targetMilliseconds)}`
+                      : `${formatDuration(targetMilliseconds - report.totalMilliseconds)} left`}
+                  </TargetStatus>
+                ) : null}
+              </TargetRow>
+              <ReportTable aria-label="Rehearsal timing report">
+                <ReportHead>
+                  <span>Slide</span>
+                  <span>Time</span>
+                  <span>Visits</span>
+                </ReportHead>
+                {slides.map((slide, index) => (
+                  <ReportRow key={slide.index} aria-current={index === at.slide ? 'true' : undefined}>
+                    <ReportSlide>
+                      <ReportNumber>{index + 1}</ReportNumber>
+                      <ReportTitle title={slide.headline || `Slide ${index + 1}`}>
+                        {slide.headline || `Slide ${index + 1}`}
+                      </ReportTitle>
+                    </ReportSlide>
+                    <ReportValue>{formatDuration(report.slides[index]?.milliseconds ?? 0)}</ReportValue>
+                    <ReportValue>{report.slides[index]?.visits ?? 0}</ReportValue>
+                  </ReportRow>
+                ))}
+              </ReportTable>
+            </RehearsalBlock>
           </PresenterSide>
         </Presenter>
       ) : (
@@ -372,6 +475,13 @@ const Presenter = styled.div`
   gap: 24px;
   padding: 26px;
   color: #e8e8ec;
+  overflow: auto;
+
+  @media (max-width: 760px) {
+    flex-direction: column;
+    gap: 16px;
+    padding: 18px;
+  }
 `
 
 const PresenterMain = styled.div`
@@ -395,6 +505,7 @@ const PresenterSide = styled.div`
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow-y: auto;
 `
 
 const Label = styled.div`
@@ -418,7 +529,7 @@ const EndNote = styled.div`
 
 const NotesBlock = styled.div`
   flex: 1;
-  min-height: 0;
+  min-height: 150px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -448,6 +559,143 @@ const Elapsed = styled.div`
   font-size: 40px;
   font-variant-numeric: tabular-nums;
   color: #ffffff;
+`
+
+const RehearsalBlock = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const RehearsalHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+`
+
+const RehearsalActions = styled.div`
+  display: flex;
+  gap: 6px;
+`
+
+const RehearsalButton = styled.button`
+  border: 1px solid #34343d;
+  border-radius: 6px;
+  background: #1b1b21;
+  color: #e8e8ec;
+  padding: 6px 9px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: #282831;
+  }
+`
+
+const TargetRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #8b8b93;
+  font-size: 12px;
+`
+
+const TargetLabel = styled.label`
+  font-family: var(--platform-typography-font-family-mono, monospace);
+  letter-spacing: 0.04em;
+`
+
+const TargetInput = styled.input`
+  width: 78px;
+  border: 1px solid #34343d;
+  border-radius: 5px;
+  background: #15151a;
+  color: #e8e8ec;
+  padding: 5px 7px;
+  font: inherit;
+  font-size: 12px;
+
+  &:focus-visible {
+    outline: 2px solid #8b8b93;
+    outline-offset: 1px;
+  }
+`
+
+const TargetStatus = styled.span<{ $over: boolean }>`
+  color: ${props => (props.$over ? '#ef9a9a' : '#a9d6b0')};
+  font-family: var(--platform-typography-font-family-mono, monospace);
+  font-size: 11px;
+`
+
+const ReportTable = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+`
+
+const ReportHead = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px 42px;
+  gap: 8px;
+  padding: 0 8px 4px;
+  color: #6d6f73;
+  font-family: var(--platform-typography-font-family-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: right;
+
+  span:first-child {
+    text-align: left;
+  }
+`
+
+const ReportRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px 42px;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  color: #bfc0c7;
+  text-align: right;
+
+  &[aria-current='true'] {
+    background: #202027;
+    color: #ffffff;
+  }
+`
+
+const ReportSlide = styled.div`
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+`
+
+const ReportNumber = styled.span`
+  flex: 0 0 20px;
+  color: #8b8b93;
+  font-family: var(--platform-typography-font-family-mono, monospace);
+`
+
+const ReportTitle = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const ReportValue = styled.span`
+  font-family: var(--platform-typography-font-family-mono, monospace);
+  font-variant-numeric: tabular-nums;
 `
 
 const Bars = styled.div`
