@@ -18,7 +18,7 @@ export type RehearsalAction =
   | { type: 'resume'; now: number }
 
 function clampSlide(slide: number, slideCount: number): number {
-  return Math.max(0, Math.min(slideCount - 1, Math.floor(slide)))
+  return Number.isFinite(slide) ? Math.max(0, Math.min(slideCount - 1, Math.floor(slide))) : 0
 }
 
 export function createRehearsal(

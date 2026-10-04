@@ -12,6 +12,7 @@
     "url": "http://localhost:5440"
   },
   "app": {
+    "acceptedDragKinds": ["video", "image"],
     "id": "plugin.slides",
     "slug": "slides",
     "name": "PureSlides",
@@ -19,90 +20,46 @@
     "productName": "pure.slides",
     "kind": "desktop",
     "description": "Write a deck in HTML and present it — slides that build, a board that IS the markup, and a PDF, image set or video out the other end.",
+    "usePureDesktopAiPanel": true,
+    "openableFileKinds": [
+      "folder"
+    ],
+    "openableNameSuffixes": [
+      ".deck"
+    ],
+    "createEntities": [
+      {
+        "id": "deck-package",
+        "label": "Slide deck",
+        "description": "Create a new HTML slide deck.",
+        "kind": "package",
+        "appSlug": "slides",
+        "defaultName": "Untitled deck",
+        "packageSuffix": ".deck",
+        "packageManifestFile": "manifest.json",
+        "packageContentFile": "index.html",
+        "packageAssetsDir": "assets",
+        "template": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <title>Untitled deck</title>\n    <style>\n      html, body { margin: 0; padding: 0; background: #0e0e11; }\n      #deck { font-family: Archivo, system-ui, -apple-system, sans-serif; }\n      [data-slide] { box-sizing: border-box; }\n      [data-step] { transition: opacity 260ms ease, transform 260ms ease; }\n      [data-step].pv-out { opacity: 0; transform: translateY(10px); visibility: hidden; }\n      [data-step].pv-in { opacity: 1; transform: none; visibility: visible; }\n    </style>\n  </head>\n  <body>\n    <div id=\"deck\" data-deck-id=\"deck\" data-width=\"1280\" data-height=\"720\" style=\"width: 1280px; height: 720px; position: relative; overflow: hidden\">\n      <div data-slide data-block=\"starter\" style=\"position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #ffffff; text-align: center\">\n        <h1 style=\"margin: 0; font-size: 64px; font-weight: 800; letter-spacing: -0.03em; color: #1b1b1e\">Untitled deck</h1>\n        <p style=\"margin: 0; font-size: 22px; color: #6d6f73\">Write slides in HTML. Present them. Export a PDF.</p>\n      </div>\n    </div>\n  </body>\n</html>\n"
+      }
+    ],
     "agents": {
       "tools": [
-        {
-          "name": "cancelDrawerRequest",
-          "description": "Cancel the saved pending request by ID. Subsequent commits are refused. Does not undo a completed save.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "requestId": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "requestId"
-            ]
-          },
-          "risk": "destructive"
-        },
-        {
-          "name": "getDrawerRequest",
-          "description": "Read the saved request, exact HTML/baseHash, edit scope, assets and design guide.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {},
-            "required": []
-          },
-          "requiresApproval": false,
-          "risk": "read"
-        },
-        {
-          "name": "commitDrawerRequest",
-          "description": "Commit the saved request once. Draft/edit: supply complete html preserving everything outside the saved selection. Describe: supply descriptions only from actual image pixels. Returns persisted status, not layout certification.",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "requestId": {
-                "type": "string"
-              },
-              "baseHash": {
-                "type": "string"
-              },
-              "html": {
-                "type": "string"
-              },
-              "title": {
-                "type": "string"
-              },
-              "descriptions": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string"
-                    },
-                    "description": {
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "name",
-                    "description"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "requestId",
-              "baseHash"
-            ]
-          },
-          "requiresApproval": true
-        },
+        {"name": "cancelDrawerRequest", "risk": "destructive", "description": "Cancel the saved pending request by ID. Subsequent commits are refused. Does not undo a completed save.", "inputSchema": {"type": "object", "properties": {"requestId": {"type": "string"}}, "required": ["requestId"]}},
+        {"name": "getDrawerRequest", "risk": "read", "description": "Read the saved request, exact HTML/baseHash, edit scope, assets and design guide.", "requiresApproval": false, "inputSchema": {"type": "object", "properties": {}, "required": []}},
+        {"name": "commitDrawerRequest", "description": "Commit the saved request once. Draft/edit: supply complete html preserving everything outside the saved selection. Describe: supply descriptions only from actual image pixels. Returns persisted status, not layout certification.", "requiresApproval": true, "inputSchema": {"type": "object", "properties": {"requestId": {"type": "string"}, "baseHash": {"type": "string"}, "html": {"type": "string"}, "title": {"type": "string"}, "descriptions": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "description": {"type": "string"}}, "required": ["name", "description"]}}}, "required": ["requestId", "baseHash"]}},
+
         {
           "name": "getDeckContext",
+          "risk": "read",
           "description": "What deck is open, and what the author is aiming at. Returns title, slide count, frame size, `hash` (the content hash of the deck — pass it as baseHash on every edit), `verification` (whether the board's render is verified, being checked, or failed with the overlapping slides named), the brief, the assets with each file's role and description, which pane is up, and `aim` — the scope a request like \"this\" or \"these\" refers to: picked elements, ticked slides, or the slide on screen. Read this before acting on a request that points at something rather than naming it, and read it again after any refusal that says the deck changed.",
           "inputSchema": {
             "type": "object",
             "properties": {}
-          },
-          "risk": "read"
+          }
         },
         {
           "name": "getSlide",
+          "risk": "read",
           "description": "The full HTML of one slide, or of the whole deck when no index is given. Also returns `hash`, the base to pass as baseHash on the edit you make from it.",
           "inputSchema": {
             "type": "object",
@@ -112,35 +69,34 @@
                 "description": "Slide number from listSlides; omit for the whole deck."
               }
             }
-          },
-          "risk": "read"
+          }
         },
         {
           "name": "listSlides",
+          "risk": "read",
           "description": "Every slide in order: index, headline, support line, speaker notes, build steps, hold seconds and any asset it shows — with the deck `hash` to pass as baseHash on the next edit.",
           "inputSchema": {
             "type": "object",
             "properties": {}
-          },
-          "risk": "read"
+          }
         },
         {
           "name": "listAssets",
+          "risk": "read",
           "description": "Files in the deck's assets folder, with each one's role and description. A file whose role is 'reference' is a design reference: build the look from it and never place it on a slide.",
           "inputSchema": {
             "type": "object",
             "properties": {}
-          },
-          "risk": "read"
+          }
         },
         {
           "name": "checkDeck",
+          "risk": "read",
           "description": "Lint the deck before presenting or exporting: a missing deck root, build steps that skip a number, images, fonts or scripts loaded over the network, document.write calls that would erase the deck — and `layout`, the render's verification state: 'verified' (every slide measured cleanly with fonts loaded), 'checking' (not every slide has been measured in a visible frame with loaded fonts yet), or 'failed' with the slides whose text overlaps. Export refuses anything that is not verified.",
           "inputSchema": {
             "type": "object",
             "properties": {}
-          },
-          "risk": "read"
+          }
         },
         {
           "name": "createDeck",
@@ -161,6 +117,7 @@
         },
         {
           "name": "setDeck",
+          "risk": "destructive",
           "description": "Replace the whole deck document, and optionally its frame size or title. Use for a wholesale rewrite; prefer the slide tools for ordinary work. The deck as it was is snapshotted to history first (restoreRevision brings it back); the result reports textRemoved when the rewrite dropped much of the text. Pass baseHash from your read — a stale one is refused.",
           "inputSchema": {
             "type": "object",
@@ -186,8 +143,7 @@
               "html"
             ]
           },
-          "requiresApproval": true,
-          "risk": "destructive"
+          "requiresApproval": true
         },
         {
           "name": "addSlide",
@@ -323,6 +279,7 @@
         },
         {
           "name": "deleteSlide",
+          "risk": "destructive",
           "description": "Remove a slide. Refused when it is the last one — a deck keeps at least one slide.",
           "inputSchema": {
             "type": "object",
@@ -339,8 +296,7 @@
               "index"
             ]
           },
-          "requiresApproval": true,
-          "risk": "destructive"
+          "requiresApproval": true
         },
         {
           "name": "setElement",
@@ -402,12 +358,12 @@
         },
         {
           "name": "listBlocks",
+          "risk": "read",
           "description": "The slide compositions on offer — title, statement, points that build, cards, two-column, full-bleed image, full-bleed video, video in a frame, screenshot, quote, number, before-and-after, sequence, agenda, divider, end card. Each says what it is FOR and how many presses it takes. Reach for these rather than inventing a layout: a deck written from nothing comes out as fifteen headline-and-bullets slides.",
           "inputSchema": {
             "type": "object",
             "properties": {}
-          },
-          "risk": "read"
+          }
         },
         {
           "name": "addBlock",
@@ -440,6 +396,7 @@
         },
         {
           "name": "deleteElement",
+          "risk": "destructive",
           "description": "Remove ONE element from a slide — a line, an image, a block the author pointed at. Rewriting it as something empty is not the same: the box, its spacing and its build step stay behind.",
           "inputSchema": {
             "type": "object",
@@ -460,8 +417,7 @@
               "path"
             ]
           },
-          "requiresApproval": true,
-          "risk": "destructive"
+          "requiresApproval": true
         },
         {
           "name": "setElementStep",
@@ -624,6 +580,7 @@
         },
         {
           "name": "present",
+          "risk": "external",
           "description": "Open the deck full screen from a slide, as if the author pressed Present.",
           "inputSchema": {
             "type": "object",
@@ -633,8 +590,7 @@
               }
             }
           },
-          "requiresApproval": true,
-          "risk": "external"
+          "requiresApproval": true
         },
         {
           "name": "saveDeck",
@@ -646,6 +602,7 @@
         },
         {
           "name": "exportDeck",
+          "risk": "external",
           "description": "Export the deck: 'pdf' (one page per slide, every build revealed — the PDF is the board's render, printed; a video prints as its poster or a panel naming the clip), 'images' (a PNG per slide), 'pptx' (a PowerPoint file: one picture slide per slide, the board's render, speaker notes attached, every video placed as a real clip that plays; opens in PowerPoint, Keynote and Google Slides, text is a picture not type) or 'video' (slides on a clock through the frame renderer). The pipeline measures every slide again first and REFUSES when the layout is not verified: a slide with overlapping text, a check that could not finish (the app hidden, fonts not loaded), or a checkDeck error. A refusal names the slides; fix them and call again. There is no way around the check.",
           "inputSchema": {
             "type": "object",
@@ -668,31 +625,31 @@
               "kind"
             ]
           },
-          "requiresApproval": true,
-          "risk": "external"
+          "requiresApproval": true
         },
         {
           "name": "stopExport",
+          "risk": "destructive",
           "description": "Stop a running export after the page or frame in flight.",
           "inputSchema": {
             "type": "object",
             "properties": {}
-          },
-          "risk": "destructive"
+          }
         },
         {
           "name": "listRevisions",
+          "risk": "read",
           "description": "List the deck's revision snapshots, newest first. A snapshot is the deck AS IT WAS before a change: every ask from the board, every setDeck/slide/element tool call, every draft and every restore copies the previous version into the package's history/ folder first (12 kept per deck). Each entry reports file, at, reason (ask / agent / agent-setDeck / draft / manual-edit / restore), scope, byteSize and textChars — compare textChars across entries to see where content went missing. Call this before restoreRevision.",
           "inputSchema": {
             "type": "object",
             "properties": {},
             "additionalProperties": false
           },
-          "requiresApproval": false,
-          "risk": "read"
+          "requiresApproval": false
         },
         {
           "name": "restoreRevision",
+          "risk": "destructive",
           "description": "Put a revision snapshot back as the open deck — the same restore as the board's Undo and History list. Use it when a rewrite (yours or an earlier one) lost content the user wanted kept: an edit result reports textRemoved when a large share of the visible text vanished. The current deck is snapshotted first (reason \"restore\"), so a restore is itself undoable and never loses the present version. Pass the file name exactly as listRevisions reports it.",
           "inputSchema": {
             "type": "object",
@@ -707,36 +664,9 @@
             ],
             "additionalProperties": false
           },
-          "requiresApproval": true,
-          "risk": "destructive"
+          "requiresApproval": true
         }
       ]
-    },
-    "acceptedDragKinds": [
-      "video",
-      "image"
-    ],
-    "openableFileKinds": [
-      "folder"
-    ],
-    "openableNameSuffixes": [
-      ".deck"
-    ],
-    "createEntities": [
-      {
-        "id": "deck-package",
-        "label": "Slide deck",
-        "description": "Create a new HTML slide deck.",
-        "appSlug": "slides",
-        "defaultName": "Untitled deck",
-        "kind": "package",
-        "packageSuffix": ".deck",
-        "packageManifestFile": "manifest.json",
-        "packageContentFile": "index.html",
-        "packageAssetsDir": "assets",
-        "template": "<!DOCTYPE html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <title>Untitled deck</title>\n    <style>\n      html, body { margin: 0; padding: 0; background: #0e0e11; }\n      #deck { font-family: Archivo, system-ui, -apple-system, sans-serif; }\n      [data-slide] { box-sizing: border-box; }\n      [data-step] { transition: opacity 260ms ease, transform 260ms ease; }\n      [data-step].pv-out { opacity: 0; transform: translateY(10px); visibility: hidden; }\n      [data-step].pv-in { opacity: 1; transform: none; visibility: visible; }\n    </style>\n  </head>\n  <body>\n    <div id=\"deck\" data-deck-id=\"deck\" data-width=\"1280\" data-height=\"720\" style=\"width: 1280px; height: 720px; position: relative; overflow: hidden\">\n      <div data-slide data-block=\"starter\" style=\"position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #ffffff; text-align: center\">\n        <h1 style=\"margin: 0; font-size: 64px; font-weight: 800; letter-spacing: -0.03em; color: #1b1b1e\">Untitled deck</h1>\n        <p style=\"margin: 0; font-size: 22px; color: #6d6f73\">Write slides in HTML. Present them. Export a PDF.</p>\n      </div>\n    </div>\n  </body>\n</html>\n"
-      }
-    ],
-    "usePureDesktopAiPanel": true
+    }
   }
 }

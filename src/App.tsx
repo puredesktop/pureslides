@@ -1,4 +1,8 @@
-import { useVideoDrop, useImageDrop } from '@purescience/platform-ui/bridge/react/useVideoDrop'
+import type { DeckAgentToolContext } from './agents/catalog'
+import {
+  useVideoDrop,
+  useImageDrop,
+} from '@purescience/platform-ui/bridge/react/useVideoDrop'
 import { imageTransferMarkup } from '@purescience/platform-ui/bridge/imageTransfer'
 import { videoEmbedMarkup } from '@purescience/platform-ui/bridge/videoTransfer'
 import { insertVideoEmbed } from './lib/slides'
@@ -60,7 +64,12 @@ import {
 } from './lib/deckVerification'
 import { measureDeck } from './lib/measureDeck'
 import { kindOf } from './lib/material'
-import { inlineAssetUrls, picturesOnly, previewCapFor, referencedAssetNames } from './lib/packageAssets'
+import {
+  inlineAssetUrls,
+  picturesOnly,
+  previewCapFor,
+  referencedAssetNames,
+} from './lib/packageAssets'
 import { hasVideo, measureVideoPlacements } from './lib/videoPlacements'
 import {
   AUTOSAVE_DELAY_MS,
@@ -102,7 +111,12 @@ import {
   setSlideElement,
   slidesFromHtml,
 } from './lib/slides'
-import { blockCatalogue, blockHtmlWith, findBlock, type BlockFill } from './lib/blocks'
+import {
+  blockCatalogue,
+  blockHtmlWith,
+  findBlock,
+  type BlockFill,
+} from './lib/blocks'
 import type { SlideEdit } from './lib/slides'
 import {
   assertScope,
@@ -143,6 +157,10 @@ import {
   writeTextFile,
 } from './bridge/platformBridge'
 import type { BoardTab, PickedElement } from './types'
+import { createDeckTransitions } from './lib/deckTransitions'
+import { readDeckPackage } from './lib/deckPackage'
+import { readMaterialPreviews } from './lib/materialPreviews'
+import { useDeckResourceOpen } from './hooks/useDeckResourceOpen'
 
 const IDLE_PROGRESS: ExportProgressState = {
   phase: 'idle',
@@ -180,10 +198,6 @@ const historyFs: HistoryFs = {
 
 /** How long after a history write to ignore the watcher's echo of it. */
 
-function deckTitleFromPath(path: string): string {
-  return fileNameFromPath(path).replace(/\.deck$/i, '') || DEFAULT_DECK_TITLE
-}
-
 export function App(): React.ReactElement {
   const { ready, meta } = usePlatformBridge()
   const drawerRequestRef = useRef<DrawerRequest | null>(null)
@@ -200,6 +214,7 @@ export function App(): React.ReactElement {
   const [documentStarted, setDocumentStarted] = useState(false)
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [status, setStatus] = useState('')
+  const [switching, setSwitching] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [boardTab, setBoardTab] = useState<BoardTab>('slides')
@@ -314,7 +329,10 @@ export function App(): React.ReactElement {
   }
 
   const openDeckPathRef = useRef<
-    | ((path: string, options?: { view?: 'reset' | 'keep' }) => Promise<void>)
+    | ((
+        path: string,
+        options?: { view?: 'reset' | 'keep' },
+      ) => Promise<boolean>)
     | null
   >(null)
 
@@ -322,7 +340,7 @@ export function App(): React.ReactElement {
     appSlug: DECK_APP_SLUG,
     suffix: DECK_PACKAGE_SUFFIX,
     kind: 'package',
-    suggestedTitle: document.title,
+    suggestedTitle: () => documentRef.current.title,
     debounceMs: AUTOSAVE_DELAY_MS,
     onExternalChange: ({ path, dirty }: { path: string; dirty: boolean }) => {
       if (dirty) return
@@ -360,6 +378,20 @@ export function App(): React.ReactElement {
   })
   const lifecycleRef = useRef(lifecycle)
   lifecycleRef.current = lifecycle
+  const [transitions] = useState(() =>
+    createDeckTransitions(
+      () => lifecycleRef.current.flush({ throwOnError: true }),
+      setSwitching,
+    ),
+  )
+  const assetLoadGeneration = useRef(0)
+  useEffect(
+    () => () => {
+      transitions.dispose()
+      assetLoadGeneration.current++
+    },
+    [transitions],
+  )
 
   /** Set the document and every ref that reads it, without an edit having happened (open, new). */
   const setDocumentNow = useCallback((next: DeckDocument) => {
@@ -389,6 +421,13 @@ export function App(): React.ReactElement {
   const editDeck = useCallback(
     (request: DeckEditRequest & { title?: string }): DeckEditResult => {
       const current = documentRef.current
+      if (transitions.busy)
+        return {
+          ok: false,
+          reason: 'stale',
+          currentHash: hashRef.current,
+          message: 'Wait for the deck to finish opening before editing.',
+        }
       if (
         request.origin === 'agent' &&
         drawerRequestRef.current?.status === 'prepared' &&
@@ -492,20 +531,58 @@ export function App(): React.ReactElement {
     [editDeck],
   )
 
-  useVideoDrop('slide', (video, position) => {
-    editHtml(html => insertVideoEmbed(html, selectedSlideRef.current, videoEmbedMarkup(video), position), 'Video embedded.')
-  }, setStatus)
+  useVideoDrop(
+    'slide',
+    (video, position) => {
+      editHtml(
+        html =>
+          insertVideoEmbed(
+            html,
+            selectedSlideRef.current,
+            videoEmbedMarkup(video),
+            position,
+          ),
+        'Video embedded.',
+      )
+    },
+    setStatus,
+  )
 
-  useImageDrop('slide', (image, position) => {
-    editHtml(html => insertVideoEmbed(html, selectedSlideRef.current, imageTransferMarkup(image), position), 'Image inserted.')
-  }, setStatus, '[data-video-drop-surface]')
+  useImageDrop(
+    'slide',
+    (image, position) => {
+      editHtml(
+        html =>
+          insertVideoEmbed(
+            html,
+            selectedSlideRef.current,
+            imageTransferMarkup(image),
+            position,
+          ),
+        'Image inserted.',
+      )
+    },
+    setStatus,
+    '[data-video-drop-surface]',
+  )
 
   /** Put a revision back: the current deck is snapshotted first, so this is itself undoable. */
   const restoreRevision = useCallback(
     async (file: string): Promise<DeckEditResult | { error: string }> => {
+      const path = boundPathRef.current,
+        baseHash = hashRef.current
       setRestoring(true)
       try {
         const found = await history.restore(file)
+        if (
+          path !== boundPathRef.current ||
+          baseHash !== hashRef.current ||
+          transitions.busy
+        )
+          return {
+            error:
+              'The deck changed while its revision was loading. Try again.',
+          }
         if ('error' in found) {
           setStatus(found.error)
           return found
@@ -659,165 +736,159 @@ export function App(): React.ReactElement {
    * frame is a sandboxed srcDoc with no origin: it shows a package file
    * only by inlining it, and this map is what it inlines from.
    */
-  const loadPreviews = useCallback(
-    async (path: string, items: MaterialItem[]): Promise<void> => {
-      const referenced = new Set(referencedAssetNames(documentRef.current.html))
-      for (const item of items) {
-        if (item.kind !== 'image' && !(item.kind === 'video' && referenced.has(item.name))) continue
-        const cap = previewCapFor(item.name)
-        if (item.bytes !== undefined && item.bytes > cap) continue
-        try {
-          const dataUrl = await readBinaryDataUrl(
-            `${path}/${DECK_ASSETS_DIR}/${item.name}`,
-            cap,
-          )
-          setPreviews(current =>
-            current[item.name] === dataUrl
-              ? current
-              : { ...current, [item.name]: dataUrl },
-          )
-        } catch {
-          // A file that will not read shows its name, as it did before.
-        }
-      }
-    },
-    [],
-  )
-
   const loadMaterial = useCallback(
     async (path: string, notes: AssetNote[]): Promise<void> => {
-      // A file just added may be the clip a frame asked for and did not get.
+      if (boundPathRef.current !== path) return
+      const attempt = ++assetLoadGeneration.current
+      const current = () =>
+        boundPathRef.current === path && assetLoadGeneration.current === attempt
       unreadableClipsRef.current.clear()
       try {
         const merged = mergeMaterial(await readAssetFiles(path), notes)
+        if (!current()) return
+        materialRef.current = merged
         setMaterial(merged)
-        void loadPreviews(path, merged)
+        const pixels = await readMaterialPreviews(
+          path,
+          merged,
+          documentRef.current.html,
+          readBinaryDataUrl,
+          current,
+        )
+        if (!current()) return
+        // A video added while this batch was reading may already have been
+        // hydrated by the HTML-change effect. Keep that newer referenced clip.
+        for (const name of referencedAssetNames(documentRef.current.html)) {
+          if (
+            kindOf(name) === 'video' &&
+            !pixels[name] &&
+            previewsRef.current[name]
+          )
+            pixels[name] = previewsRef.current[name]
+        }
+        previewsRef.current = pixels
+        setPreviews(pixels)
       } catch {
+        if (!current()) return
+        materialRef.current = []
+        previewsRef.current = {}
         setMaterial([])
         setPreviews({})
       }
     },
-    [readAssetFiles, loadPreviews],
+    [readAssetFiles],
   )
 
   const openDeckPath = useCallback(
     async (
       path: string,
       { view = 'reset' as 'reset' | 'keep' } = {},
-    ): Promise<void> => {
+    ): Promise<boolean> => {
       setError(null)
       setStatus('Opening…')
+      if (exportingRef.current || drawerCommitBusy.current) {
+        setError(
+          'Wait for the current export or drawer save to finish before opening another deck.',
+        )
+        return false
+      }
+      const root = path.replace(/\/+$/, '')
       try {
-        const root = path.replace(/\/+$/, '')
-        const html = await readTextFile(`${root}/${DECK_FILE}`)
-        let title = deckTitleFromPath(root)
-        let notes: AssetNote[] = []
-        // Wizard answers restore from the manifest, and RESET to defaults for
-        // a deck that never stored them — otherwise the previous deck's
-        // brief, look and slide count leak into this one.
-        let nextBrief = ''
-        let nextLook = DEFAULT_LOOK
-        let nextSlideCount = DEFAULT_SLIDE_COUNT
-        try {
-          const manifest = parsePackageManifest(
-            await readTextFile(`${root}/${DECK_MANIFEST_FILE}`),
-          )
-          title = manifest.title
-          notes = manifest.assets ?? []
-          nextBrief = manifest.brief ?? ''
-          nextLook = manifest.look ?? DEFAULT_LOOK
-          nextSlideCount = manifest.slideCount ?? DEFAULT_SLIDE_COUNT
-        } catch {
-          // A deck opened directly has no manifest of ours; the folder name
-          // is a perfectly good title.
-        }
-        setBrief(nextBrief)
-        setLook(nextLook)
-        setSlideCount(nextSlideCount)
-        try {
-          drawerRequestRef.current = JSON.parse(
-            await readTextFile(`${root}/drawer-request.json`),
-          )
-        } catch {
-          drawerRequestRef.current = null
-        }
-        const sameDeck = boundPathRef.current === root
-        setDocumentNow({ title, html })
-        setDocumentPath(root)
-        setDocumentStarted(true)
-        if (!sameDeck) clearEvidence()
-        void history.load(root)
-        if (view !== 'keep') {
+        const opened = await transitions.run(
+          () => readDeckPackage(root, readTextFile),
+          value => {
+            const sameDeck = boundPathRef.current === root
+            // Bind the new package synchronously with its source and metadata.
+            // The old document has already been saved successfully.
+            boundPathRef.current = root
+            briefRef.current = value.brief
+            setBrief(value.brief)
+            lookRef.current = value.look
+            setLook(value.look)
+            slideCountRef.current = value.slideCount
+            setSlideCount(value.slideCount)
+            drawerRequestRef.current = value.drawerRequest
+            setDocumentNow(value.document)
+            lifecycleRef.current.adopt(root, { title: value.document.title })
+            setDocumentPath(root)
+            setDocumentStarted(true)
+            assetLoadGeneration.current++
+            materialRef.current = []
+            previewsRef.current = {}
+            setMaterial([])
+            setPreviews({})
+            if (!sameDeck) clearEvidence()
+            void history.load(root)
+            if (view !== 'keep') {
           setBoardTab('slides')
           setWizardOpen(false)
           setSelectedSlide(0)
           setSlideSelection([])
           setElementSelection([])
         }
-        void loadMaterial(root, notes)
-        if (!exportingRef.current && !sameDeck) {
+            setPresentOpen(false)
+            setHtmlOpen(false)
+            setExportOpen(false)
+            if (!exportingRef.current && !sameDeck) {
           setProgress(IDLE_PROGRESS)
           setLastExportPath(null)
         }
-        // The finished file is the durable fact, not React state: whatever
-        // exports/ holds is what "the last export" means for this deck.
-        void (async () => {
-          try {
-            const listing = (await listFiles(`${root}/${DECK_EXPORT_DIR}`)) as {
-              entries?: { name?: string; isDirectory?: boolean }[]
-            }
-            const entries = listing?.entries ?? []
-            const file = entries.find(
+            void loadMaterial(root, value.notes)
+            const assetAttempt = assetLoadGeneration.current
+            void (async () => {
+              try {
+                const listing = (await listFiles(
+                  `${root}/${DECK_EXPORT_DIR}`,
+                )) as { entries?: { name?: string; isDirectory?: boolean }[] }
+                if (
+                  boundPathRef.current !== root ||
+                  assetLoadGeneration.current !== assetAttempt
+                )
+                  return
+                const entries = listing?.entries ?? []
+                const file = entries.find(
               entry =>
                 entry?.name &&
                 !entry.isDirectory &&
                 /\.(pdf|mp4)$/i.test(entry.name),
             )
-            if (file) {
-              setLastExportPath(`${root}/${DECK_EXPORT_DIR}/${file.name}`)
-            } else if (
-              // An image export's artifact is the frames folder itself.
-              entries.some(
-                entry => entry?.name === 'frames' && entry.isDirectory,
-              )
-            ) {
-              setLastExportPath(`${root}/${DECK_EXPORT_DIR}/frames`)
-            }
-          } catch {
-            // No exports folder yet: nothing to link.
-          }
-        })()
-        setStatus(`Opened ${title}`)
+                if (file)
+                  setLastExportPath(`${root}/${DECK_EXPORT_DIR}/${file.name}`)
+                else if (
+                  entries.some(
+                    entry => entry.name === 'frames' && entry.isDirectory,
+                  )
+                )
+                  setLastExportPath(`${root}/${DECK_EXPORT_DIR}/frames`)
+              } catch {
+                /* No exports yet. */
+              }
+            })()
+            setStatus(`Opened ${value.document.title}`)
+          },
+          !(view === 'keep' && boundPathRef.current === root),
+        )
+        return opened
       } catch (loadError) {
         setError(
           loadError instanceof Error ? loadError.message : String(loadError),
         )
         setStatus('Could not open the deck.')
+        return false
       }
     },
-    [loadMaterial, setDocumentNow, clearEvidence, history],
+    [transitions, loadMaterial, setDocumentNow, clearEvidence, history],
   )
   useEffect(() => {
     openDeckPathRef.current = openDeckPath
   }, [openDeckPath])
 
-  useEffect(() => {
-    const path = viewportResource?.path?.trim()
-    if (!appReady || !path) return
-    void openDeckPath(path).finally(clearResource)
-  }, [appReady, viewportResource, clearResource, openDeckPath])
-
-  useEffect(() => {
-    if (boundPathRef.current === documentPath) return
-    const target = documentPath
-    const current = lifecycleRef.current
-    void current.flush().finally(() => {
-      boundPathRef.current = target
-      boundDocumentRef.current = documentRef.current
-      if (target) current.adopt(target, { title: documentRef.current.title })
-      else current.reset()
-    })
-  }, [documentPath])
+  const resourceOpen = useDeckResourceOpen(
+    appReady,
+    viewportResource?.path?.trim(),
+    openDeckPath,
+    clearResource,
+  )
 
   useEffect(() => {
     const path = lifecycle.doc.path
@@ -1423,7 +1494,15 @@ export function App(): React.ReactElement {
       } catch {
         /* already there */
       }
+      if (path !== boundPathRef.current || transitions.busy)
+        throw Error(
+          'The deck changed before the asset could be saved. Try again.',
+        )
       await writeBinaryFile(`${path}/${DECK_ASSETS_DIR}/${fileName}`, base64)
+      if (path !== boundPathRef.current || transitions.busy)
+        throw Error(
+          'The asset was saved to the previous deck. Open that deck to use it.',
+        )
       void recordOperation({
         lane: 'agent',
         kind: 'deck.asset.add',
@@ -1439,7 +1518,10 @@ export function App(): React.ReactElement {
   const addPackageAsset = useCallback(
     async (sourcePath: string, name?: string): Promise<string> => {
       if (!boundPathRef.current) throw new Error('there is no deck open')
+      const path = boundPathRef.current
       const binary = await readBinaryBase64(sourcePath)
+      if (path !== boundPathRef.current || transitions.busy)
+        throw Error('The deck changed while the asset was loading. Try again.')
       return writePackageAsset(
         name || fileNameFromPath(sourcePath),
         binary.base64,
@@ -1460,6 +1542,10 @@ export function App(): React.ReactElement {
       try {
         for (const file of files) {
           const bytes = new Uint8Array(await file.arrayBuffer())
+          if (path !== boundPathRef.current || transitions.busy)
+            throw Error(
+              'The deck changed while the files were loading. Try again.',
+            )
           await writePackageAsset(file.name, base64FromBytes(bytes))
         }
         await loadMaterial(path, notesFrom(materialRef.current))
@@ -1535,34 +1621,56 @@ export function App(): React.ReactElement {
   const previousDeckPathRef = useRef<string | null>(null)
 
   const createNewDeck = useCallback(async (): Promise<void> => {
-    setSwitcherOpen(false)
-    previousDeckPathRef.current = boundPathRef.current
-    const next = createDefaultDeckDocument()
-    setDocumentNow(next)
-    setDocumentPath(null)
-    boundPathRef.current = null
-    lifecycleRef.current.reset()
-    history.reset()
-    clearEvidence()
-    setError(null)
-    setDocumentStarted(true)
-    setProgress(IDLE_PROGRESS)
-    setLastExportPath(null)
-    setMaterial([])
-    setPreviews({})
-    setBrief('')
-    setLook(DEFAULT_LOOK)
-    setSlideCount(DEFAULT_SLIDE_COUNT)
-    setSelectedSlide(0)
-    setBoardTab('slides')
-    setWizardOpen(true)
-    setStatus('New deck.')
-    // No draft package yet, deliberately. `ensureDraft` names the package
-    // from the suggestedTitle of the LAST render — the deck that was open a
-    // moment ago — so creating it here mints a package named after the
-    // previous deck. The draft is created on first need instead (adding a
-    // file, or Create), by which point the reset title has rendered.
-  }, [setDocumentNow, history, clearEvidence])
+    if (exportingRef.current || drawerCommitBusy.current) {
+      setError(
+        'Wait for the current export or drawer save to finish before creating a deck.',
+      )
+      return
+    }
+    try {
+      await transitions.run(
+        async () => createDefaultDeckDocument(),
+        next => {
+          setSwitcherOpen(false)
+          previousDeckPathRef.current = boundPathRef.current
+          boundPathRef.current = null
+          lifecycleRef.current.reset()
+          setDocumentNow(next)
+          setDocumentPath(null)
+          history.reset()
+          clearEvidence()
+          assetLoadGeneration.current++
+          materialRef.current = []
+          previewsRef.current = {}
+          setMaterial([])
+          setPreviews({})
+          briefRef.current = ''
+          lookRef.current = DEFAULT_LOOK
+          slideCountRef.current = DEFAULT_SLIDE_COUNT
+          setBrief('')
+          setLook(DEFAULT_LOOK)
+          setSlideCount(DEFAULT_SLIDE_COUNT)
+          drawerRequestRef.current = null
+          setSelectedSlide(0)
+          setSlideSelection([])
+          setElementSelection([])
+          setError(null)
+          setDocumentStarted(true)
+          setProgress(IDLE_PROGRESS)
+          setLastExportPath(null)
+          setPresentOpen(false)
+          setHtmlOpen(false)
+          setExportOpen(false)
+          setBoardTab('slides')
+          setWizardOpen(true)
+          setStatus('New deck.')
+          // First write creates the draft after the new suggested title renders.
+        },
+      )
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error))
+    }
+  }, [transitions, setDocumentNow, history, clearEvidence])
 
   const cancelNewDeck = useCallback((): void => {
     setWizardOpen(false)
@@ -1738,10 +1846,18 @@ export function App(): React.ReactElement {
       for (const name of wanted) {
         const cap = previewCapFor(name)
         try {
-          const dataUrl = await readBinaryDataUrl(`${path}/${DECK_ASSETS_DIR}/${name}`, cap)
-          if (cancelled) return
-          setPreviews(current => (current[name] === dataUrl ? current : { ...current, [name]: dataUrl }))
+          const dataUrl = await readBinaryDataUrl(
+            `${path}/${DECK_ASSETS_DIR}/${name}`,
+            cap,
+          )
+          if (cancelled || boundPathRef.current !== path) return
+          setPreviews(current =>
+            current[name] === dataUrl
+              ? current
+              : { ...current, [name]: dataUrl },
+          )
         } catch {
+          if (cancelled || boundPathRef.current !== path) return
           // Missing or too large: the frame shows the clip's box, the export
           // uses the file. Remembered, so every keystroke does not ask again;
           // adding the file to the package clears the memory.
@@ -1752,23 +1868,30 @@ export function App(): React.ReactElement {
     return () => {
       cancelled = true
     }
-  }, [document.html])
+  }, [document.html, documentPath])
 
   /** Add a composition as a slide, its slot filled: the tool and the pane's button are one door. */
   const placeBlock = useCallback(
-    (blockId: string, atIndex?: number, options?: { baseHash?: string }, fill?: BlockFill) => {
+    (
+      blockId: string,
+      atIndex?: number,
+      options?: { baseHash?: string },
+      fill?: BlockFill,
+    ) => {
       const block = findBlock(blockId)
       if (!block) return null
       return editHtml(
         html => addSlide(html, blockHtmlWith(block, fill), atIndex),
-        fill?.asset ? `Added a ${block.label.toLowerCase()} slide with ${fill.asset}.` : `Added a ${block.label.toLowerCase()} slide.`,
+        fill?.asset
+          ? `Added a ${block.label.toLowerCase()} slide with ${fill.asset}.`
+          : `Added a ${block.label.toLowerCase()} slide.`,
         agentEdit(options, 'slide'),
       )
     },
     [editHtml, agentEdit],
   )
 
-  usePureSlidesAgentTools(true, {
+  const agentContext: DeckAgentToolContext = {
     document,
     hash: deckHash,
     verification,
@@ -1799,21 +1922,41 @@ export function App(): React.ReactElement {
       }),
     createAndOpen: async next => {
       const lifecycleNow = lifecycleRef.current
-      await lifecycleNow.flush()
-      setDocumentNow(next)
-      setDocumentPath(null)
-      boundPathRef.current = null
-      lifecycleNow.reset()
-      history.reset()
-      clearEvidence()
+      const applied = await transitions.run(
+        async () => next,
+        value => {
+          boundPathRef.current = null
+          lifecycleNow.reset()
+          setDocumentNow(value)
+          setDocumentPath(null)
+          history.reset()
+          clearEvidence()
+          assetLoadGeneration.current++
+          materialRef.current = []
+          previewsRef.current = {}
+          setMaterial([])
+          setPreviews({})
+          briefRef.current = ''
+          lookRef.current = DEFAULT_LOOK
+          slideCountRef.current = DEFAULT_SLIDE_COUNT
+          setBrief('')
+          setLook(DEFAULT_LOOK)
+          setSlideCount(DEFAULT_SLIDE_COUNT)
+          drawerRequestRef.current = null
+          setDocumentStarted(true)
+          setBoardTab('slides')
+          setWizardOpen(false)
+        },
+      )
+      if (!applied)
+        throw Error('Another deck was opened before creation completed.')
       const path = await lifecycleNow.ensureDraft()
       if (!path) return null
+      if (documentRef.current !== next || transitions.busy)
+        throw Error('The deck changed before draft creation completed.')
       boundPathRef.current = path
       setDocumentPath(path)
       void history.load(path)
-      setDocumentStarted(true)
-      setBoardTab('slides')
-      setWizardOpen(false)
       return path
     },
     listAssets: async () => {
@@ -1925,7 +2068,8 @@ export function App(): React.ReactElement {
         agentEdit(options, `slide ${index + 1} element ${path}`),
       ),
     blocks: blockCatalogue(),
-    addBlock: (blockId, atIndex, options, fill) => placeBlock(blockId, atIndex, options, fill),
+    addBlock: (blockId, atIndex, options, fill) =>
+      placeBlock(blockId, atIndex, options, fill),
     deleteElement: (index, path, options) =>
       editHtml(
         html => deleteSlideElement(html, index, path),
@@ -1941,10 +2085,8 @@ export function App(): React.ReactElement {
     listRevisions: () => history.newestFirst(),
     restoreRevision,
     setSelection: patch => {
-      if (patch.selectedSlide !== undefined)
-        setSelectedSlide(patch.selectedSlide)
-      if (patch.slideIndexes !== undefined)
-        setSlideSelection(patch.slideIndexes)
+      if (patch.selectedSlide !== undefined) setSelectedSlide(patch.selectedSlide)
+      if (patch.slideIndexes !== undefined) setSlideSelection(patch.slideIndexes)
       if (patch.elementPaths !== undefined) {
         setElementSelection(
           patch.elementPaths.map(path => ({
@@ -1966,14 +2108,17 @@ export function App(): React.ReactElement {
     saveDeck,
     runExport,
     stopExport,
-  })
+  }
+  usePureSlidesAgentTools(true, agentContext, () => !transitions.busy)
 
   const hasOpenDeck =
     documentStarted || documentPath !== null || lifecycle.doc.path !== null
 
   // One verb beside the status line: Retry a refused ask, or Undo the
   // last revision (which restores the snapshot taken before it).
-  const statusAction: StatusAction | null = askRetry
+  const statusAction: StatusAction | null = resourceOpen.failed
+    ? { label: 'Retry opening', run: resourceOpen.retry }
+    : askRetry
     ? { label: 'Retry', run: () => askAboutSelection(askRetry) }
     : undoOffer
     ? { label: 'Undo', run: () => void restoreRevision(undoOffer.file) }
@@ -2017,6 +2162,8 @@ export function App(): React.ReactElement {
     <AppFrame
       data-app={DECK_APP_SLUG}
       identityAppSlug={DECK_APP_SLUG}
+      inert={switching || undefined}
+      aria-busy={switching}
       headerDocumentName={
         document.title?.trim() || (lifecycle.doc.path ? fileNameFromPath(lifecycle.doc.path) : undefined)
       }
@@ -2058,7 +2205,7 @@ export function App(): React.ReactElement {
             material={material}
             previews={previews}
             onAddFiles={() => void addFilesFromDialog()}
-            busy={wizardBusy !== null}
+            busy={switching || wizardBusy !== null}
             busyLabel={wizardBusy ?? ''}
             onCreate={() => {
               void (async () => {
