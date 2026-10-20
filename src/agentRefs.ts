@@ -55,11 +55,15 @@ export function revisionAgentRefs(file: string, label: string): AgentRefProps {
   }
 }
 
-/** The open deck, by the documentPath the reads answer with. */
-export function deckAgentRefs(path: string | null | undefined, title?: string): Partial<AgentRefProps> {
-  if (!path) return {}
+/**
+ * The open deck, by the documentPath the reads answer with, plus `@open`: the
+ * board is the open surface, where a write call that names no tagged item is
+ * drawn (an unsaved deck has no path but is still the open surface).
+ */
+export function deckAgentRefs(path: string | null | undefined, title?: string): AgentRefProps {
+  if (!path) return { 'data-agent-ref': '@open', 'data-agent-label': title || 'Deck' }
   return {
-    'data-agent-ref': [path, `documentPath:${path}`, `path:${path}`].join(' '),
+    'data-agent-ref': [path, `documentPath:${path}`, `path:${path}`, '@open'].join(' '),
     'data-agent-label': title || path.split('/').pop() || path,
   }
 }
