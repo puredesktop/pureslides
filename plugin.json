@@ -539,7 +539,7 @@
         },
         {
           "name": "draftDeck",
-          "description": "Prepare and save a deck composition request. Returns context and design guide immediately; no model call. Compose the complete deck in this drawer, then commitDrawerRequest and checkDeck.",
+          "description": "Prepare and save a deck composition request; no model call. Returns a short receipt immediately (requestId, baseHash, kind, status, path, image count, base html size). Read getDrawerRequest for the base html, design guide and material, compose the complete deck in this drawer, then commitDrawerRequest with requestId, baseHash and html, and checkDeck.",
           "inputSchema": {
             "type": "object",
             "properties": {}

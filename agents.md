@@ -140,7 +140,9 @@ Not "write eight slides by hand". The author's path is:
 3. `draftDeck`.
 
 `draftDeck` now PREPARES a durable request and returns immediately. It never
-runs another model. Read getDrawerRequest, use its design guide and base HTML,
+runs another model. Its reply is a short receipt — `requestId`, `baseHash`,
+`kind`, `status`, `path`, image count and the base html's size — not the
+request itself. Read getDrawerRequest, use its design guide and base HTML,
 compose here in the drawer, then call commitDrawerRequest with requestId,
 baseHash and complete HTML (including notes/build attributes). For a draft,
 replace the untouched starter; preserve existing slides unless asked to replace.
