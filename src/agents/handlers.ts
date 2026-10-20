@@ -528,6 +528,33 @@ export function setBriefHandler(
   }
 }
 
+/**
+ * What draftDeck answers: the tokens commitDrawerRequest needs (requestId,
+ * baseHash) and a pointer to getDrawerRequest — not the request itself.
+ * The prepared request carries the whole deck html, the design guide and
+ * every asset note, all of which grow with the deck; getDrawerRequest is
+ * the read that returns them, once, when the agent composes.
+ */
+export function preparedRequestReceipt(result: unknown): unknown {
+  if (!result || typeof result !== 'object' || !('id' in result)) return result
+  const request = result as Record<string, unknown>
+  const images = Array.isArray(request.images) ? request.images : []
+  return {
+    prepared: true,
+    requestId: request.id,
+    baseHash: request.baseHash,
+    kind: request.kind,
+    status: request.status,
+    path: request.path,
+    ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+    ...(typeof request.slideCount === 'number' ? { slideCount: request.slideCount } : {}),
+    images: images.length,
+    baseHtmlChars: typeof request.html === 'string' ? request.html.length : 0,
+    nextAction:
+      'call getDrawerRequest for the base html, design guide and material; compose the complete deck, then commitDrawerRequest with this requestId, baseHash and html; then checkDeck',
+  }
+}
+
 export async function draftDeckHandler(
   context: DeckAgentToolContext,
 ): Promise<AgentToolHandlerResult> {
@@ -541,7 +568,7 @@ export async function draftDeckHandler(
   }
   try {
     const result = await context.draftDeck()
-    return { content: formatAgentToolJson(result) }
+    return { content: formatAgentToolJson(preparedRequestReceipt(result)) }
   } catch (error) {
     return agentToolErrorContent(
       error instanceof Error ? error.message : String(error),
