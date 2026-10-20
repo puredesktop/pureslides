@@ -144,7 +144,11 @@ runs another model. Its reply is a short receipt — `requestId`, `baseHash`,
 `kind`, `status`, `path`, image count and the base html's size — not the
 request itself. Read getDrawerRequest, use its design guide and base HTML,
 compose here in the drawer, then call commitDrawerRequest with requestId,
-baseHash and complete HTML (including notes/build attributes). For a draft,
+baseHash and complete HTML (including notes/build attributes). A deck of more
+than 6 slides goes in parts, because a whole long deck is more than one reply can
+hold (the call is cut off and arrives empty): commit the first 4–6 slides, then
+`addSlide` with each remaining slide's html, one call per slide, in order; then
+`checkDeck`. For a draft,
 replace the untouched starter; preserve existing slides unless asked to replace.
 For edits, only the saved slide/element scope may change; head/CSS and other
 slides are protected by a deterministic comparison. Pass the full valid deck.
