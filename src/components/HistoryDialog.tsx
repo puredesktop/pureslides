@@ -13,6 +13,7 @@ import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
 import { revisionLabel, type RevisionEntry } from '@purescience/platform-ui/editing'
 import { DECK_REASON_LABELS } from '../lib/deckDoor'
+import { revisionAgentRefs } from '../agentRefs'
 
 interface HistoryDialogProps {
   open: boolean
@@ -63,7 +64,10 @@ export function HistoryDialog({
             {entries.map(entry => {
               const delta = entry.textChars - currentTextChars
               return (
-                <Row key={entry.file}>
+                <Row
+                  key={entry.file}
+                  {...revisionAgentRefs(entry.file, revisionLabel(entry, now, DECK_REASON_LABELS))}
+                >
                   <RowText>
                     <RowLabel>{revisionLabel(entry, now, DECK_REASON_LABELS)}</RowLabel>
                     <RowMeta>

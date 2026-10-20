@@ -2373,6 +2373,7 @@ export function App(): React.ReactElement {
           onRecheck={() => void recheckLayout()}
           onHistory={() => setHistoryOpen(true)}
           revisionCount={revisions.entries.length}
+          documentPath={lifecycle.doc.path ?? documentPath}
         />
       ) : (
         <DocumentSwitcher

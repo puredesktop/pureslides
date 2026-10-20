@@ -2,6 +2,7 @@ import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
 import { ASSET_ROLES, type MaterialItem } from '../lib/material'
 import type { AssetRole } from '../lib/assetNotes'
+import { assetAgentRefs } from '../agentRefs'
 
 interface AssetsPaneProps {
   material: MaterialItem[]
@@ -80,7 +81,7 @@ export function AssetsPane({
         {material.length ? (
           <Grid>
             {material.map(item => (
-              <Item key={item.name}>
+              <Item key={item.name} {...assetAgentRefs(item.name)}>
                 <Thumb $kind={item.kind}>
                   {previews[item.name] ? (
                     <ThumbImage src={previews[item.name]} alt={item.name} />
