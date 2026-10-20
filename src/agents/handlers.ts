@@ -550,8 +550,9 @@ export function preparedRequestReceipt(result: unknown): unknown {
     ...(typeof request.slideCount === 'number' ? { slideCount: request.slideCount } : {}),
     images: images.length,
     baseHtmlChars: typeof request.html === 'string' ? request.html.length : 0,
+    // A whole long deck in one call is more than a model can write in one reply: it is cut off and arrives empty.
     nextAction:
-      'call getDrawerRequest for the base html, design guide and material; compose the complete deck, then commitDrawerRequest with this requestId, baseHash and html; then checkDeck',
+      'call getDrawerRequest for the base html, design guide and material; compose the deck; commitDrawerRequest with this requestId, baseHash and html. A deck of more than 6 slides goes in parts: commit the first 4–6 slides, then addSlide (html) once per remaining slide, in order; then checkDeck',
   }
 }
 
