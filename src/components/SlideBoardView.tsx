@@ -1082,6 +1082,9 @@ const Selected = styled.div`
 `
 
 const SelectedStage = styled.div`
+  html[data-slides-dialog] & {
+    visibility: hidden;
+  }
   flex: 1;
   min-height: 0;
   display: grid;

@@ -85,6 +85,16 @@ export function NewDeckWizard({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, busy, onCancel])
 
+  // The live slide on the board is a frame of its own, which can show through a dialog over it: hidden while this
+  // is open (the scrim covers it anyway).
+  useEffect(() => {
+    if (!open) return
+    document.documentElement.dataset.slidesDialog = ''
+    return () => {
+      delete document.documentElement.dataset.slidesDialog
+    }
+  }, [open])
+
   if (!open) return null
   const activeFormat = FRAMES.find(
     frame => frame.width === geometry.width && frame.height === geometry.height,
@@ -225,6 +235,9 @@ const Scrim = styled.div`
   position: fixed;
   inset: 0;
   z-index: 45;
+  /* Its own layer, so no frame below is drawn over it. */
+  isolation: isolate;
+  transform: translateZ(0);
   display: grid;
   place-items: center;
   background: rgb(12 12 14 / 0.5);
