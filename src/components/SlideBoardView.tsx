@@ -18,6 +18,7 @@ import { blockCatalogue } from '../lib/blocks'
 import type { BoardTab, DeckGeometry, PickedElement } from '../types'
 import type { MaterialItem } from '../lib/material'
 import type { DeckVerification, LayoutReport, SlideEvidenceMap } from '../lib/deckVerification'
+import { assetAgentRefs, blockAgentRefs, deckAgentRefs, slideAgentRefs } from '../agentRefs'
 
 /** One verb offered beside the status line — Undo after a revision, Retry after a refused ask. */
 export interface StatusAction {
@@ -68,6 +69,8 @@ interface SlideBoardViewProps {
   onRecheck: () => void
   onHistory: () => void
   revisionCount: number
+  /** The open deck's path — only tags the board for the agent activity layer. */
+  documentPath?: string | null
 }
 
 export function SlideBoardView({
@@ -109,6 +112,7 @@ export function SlideBoardView({
   onRecheck,
   onHistory,
   revisionCount,
+  documentPath = null,
 }: SlideBoardViewProps): React.ReactElement {
   const slide: Slide | undefined = slides[selected] ?? slides[0]
   const [request, setRequest] = useState('')
@@ -240,7 +244,7 @@ export function SlideBoardView({
       : 'Only this slide changes.'
 
   return (
-    <Root>
+    <Root {...deckAgentRefs(documentPath)}>
       {picker ? (
         <PickerScrim onClick={() => setPicker(false)}>
           <PickerBox onClick={event => event.stopPropagation()}>
@@ -254,6 +258,7 @@ export function SlideBoardView({
                 <PickerCard
                   key={block.id}
                   type="button"
+                  {...blockAgentRefs(block.id, block.label)}
                   onClick={() => {
                     onAdd(block.id)
                     setPicker(false)
@@ -357,6 +362,7 @@ export function SlideBoardView({
                   {dropBefore === item.index ? <DropLine /> : null}
                 <Card
                   data-slide-card={item.index}
+                  {...slideAgentRefs(item.index, item.headline)}
                   type="button"
                   draggable
                   $selected={item.index === selected}
@@ -448,7 +454,7 @@ export function SlideBoardView({
 
             {slide ? (
               <Selected>
-                <SelectedStage>
+                <SelectedStage {...slideAgentRefs(slide.index, slide.headline)}>
                   <SlideFrame
                     html={html}
                     slide={slide.index}
@@ -658,7 +664,12 @@ export function SlideBoardView({
               <>
                 <Picked>
                   {elementSelection.map(item => (
-                    <Chip key={item.path} title={item.path}>
+                    <Chip
+                      key={item.path}
+                      title={item.path}
+                      data-agent-ref={`elementPaths:${item.path}`}
+                      data-agent-label={item.label || item.path}
+                    >
                       {item.label || item.path}
                     </Chip>
                   ))}
@@ -756,6 +767,7 @@ export function SlideBoardView({
                     <AssetChip
                       key={item.name}
                       type="button"
+                      {...assetAgentRefs(item.name)}
                       title={`${item.reference}${item.description ? ` — ${item.description}` : ''}`}
                       onClick={() =>
                         setRequest(current =>
