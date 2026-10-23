@@ -15,6 +15,8 @@ import { insertVideoEmbed } from './lib/slides'
  * uses and a tool the drawer agent calls that changes the same state.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLiveJson } from '@purescience/platform-ui/editing/live/useLiveJson'
+import { deckFromLive, deckToLive } from './lib/liveDeck'
 import { AppFrame } from '@purescience/platform-bridge/components/AppFrame'
 import { usePlatformBridge } from '@purescience/platform-ui/bridge/react/usePlatformBridge'
 import { usePlatformViewportResource } from '@purescience/platform-ui/bridge/react/usePlatformViewportResource'
@@ -347,7 +349,9 @@ export function App(): React.ReactElement {
       if (exportingRef.current) return
       void openDeckPathRef.current?.(path, { view: 'keep' })
     },
-    serialize: () => {
+    serialize: () => deckFiles(),
+  })
+  function deckFiles(): Array<{ name: string; content: string }> {
       const current = boundDocumentRef.current
       return [
         {
@@ -374,8 +378,7 @@ export function App(): React.ReactElement {
         { name: DECK_FILE, content: current.html },
         { name: `${DECK_ASSETS_DIR}/.keep`, content: '' },
       ]
-    },
-  })
+  }
   const lifecycleRef = useRef(lifecycle)
   lifecycleRef.current = lifecycle
   const [transitions] = useState(() =>
@@ -401,8 +404,38 @@ export function App(): React.ReactElement {
     hashRef.current = hashDeck(next.html)
   }, [])
 
+  // A deck the organisation shares, edited live (useLiveJson): everyone's slides merged slide by slide; the live
+  // copy writes the deck, so this tab stops saving it itself while live.
+  const liveDeckPath = lifecycle.doc.path ? `${lifecycle.doc.path}/${DECK_FILE}` : null
+  const live = useLiveJson(liveDeckPath, {
+    loadSaved: async () => {
+      const made = deckToLive(documentRef.current)
+      if (made && made.html !== documentRef.current.html) setDocumentNow({ ...documentRef.current, html: made.html })
+      return (made?.live ?? { title: documentRef.current.title, shell: documentRef.current.html, slides: [] }) as unknown as Record<string, unknown>
+    },
+    onRemote: next => {
+      const deck = deckFromLive(next, documentRef.current.title)
+      if (deck) setDocumentNow(deck)
+    },
+    serialize: () => {
+      const root = lifecycle.doc.path
+      return root ? { resourcePath: root, files: (lifecycleSerializeRef.current?.() ?? []).filter(file => file.name !== `${DECK_ASSETS_DIR}/.keep`).map(file => ({ name: file.name, content: file.content })) } : null
+    },
+  })
+  const liveRef = useRef(live)
+  liveRef.current = live
+  const lifecycleSerializeRef = useRef<(() => Array<{ name: string; content: string }>) | null>(deckFiles)
+  lifecycleSerializeRef.current = deckFiles
+
   const applyDocument = useCallback(
     (next: DeckDocument) => {
+      // Live: the change goes to everyone (each slide with its id), and the live copy writes the deck.
+      if (liveRef.current.status === 'on') {
+        const made = deckToLive(next)
+        setDocumentNow(made ? { ...next, html: made.html } : next)
+        if (made) liveRef.current.write(made.live as unknown as Record<string, unknown>)
+        return
+      }
       setDocumentNow(next)
       lifecycleRef.current.markDirty()
     },
