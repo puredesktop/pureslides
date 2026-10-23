@@ -125,6 +125,30 @@ export function SlideBoardView({
    */
   const [picker, setPicker] = useState(false)
   const [filesOpen, setFilesOpen] = useState(false)
+  // The stage's inner box, so the live slide fits it: as wide as the stage allows, or as tall, whichever the
+  // frame's aspect reaches first, and centred. A fixed width spilled past a narrow stage, off to the right.
+  const [stageBox, setStageBox] = useState<{ width: number; height: number } | null>(null)
+  const stageObserver = useRef<ResizeObserver | null>(null)
+  const stageRef = useCallback((node: HTMLDivElement | null) => {
+    stageObserver.current?.disconnect()
+    stageObserver.current = null
+    if (!node) return
+    const measure = () => {
+      const style = getComputedStyle(node)
+      const width = node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      const height = node.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
+      setStageBox(prev => (prev && prev.width === width && prev.height === height ? prev : { width, height }))
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    stageObserver.current = observer
+  }, [])
+  const stageWidth =
+    stageBox && stageBox.width > 0 && stageBox.height > 0
+      ? Math.max(160, Math.floor(Math.min(stageBox.width, (stageBox.height * geometry.width) / geometry.height)))
+      : 620
   // Overlaps the fit could not separate, reported by whichever frame rendered
   // the slide. The app keeps the evidence (it gates export on it); the card
   // and the stage read the count off it so the two agree.
@@ -454,13 +478,13 @@ export function SlideBoardView({
 
             {slide ? (
               <Selected>
-                <SelectedStage {...slideAgentRefs(slide.index, slide.headline)}>
+                <SelectedStage ref={stageRef} {...slideAgentRefs(slide.index, slide.headline)}>
                   <SlideFrame
                     html={html}
                     slide={slide.index}
                     step={step}
                     geometry={geometry}
-                    width={620}
+                    width={stageWidth}
                     previews={previews}
                     live
                     dropTarget
