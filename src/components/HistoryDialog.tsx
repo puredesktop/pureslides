@@ -112,7 +112,8 @@ const Dialog = styled.div`
   padding: 20px;
   border: 1px solid var(--platform-colors-border);
   border-radius: 0;
-  background: var(--pure-chrome-surface);
+  /* The popover surface, opaque: the chrome surface is glass on a glass desk, and the editor showed through. */
+  background: var(--platform-colors-elevated, #fff);
   box-shadow: 0 18px 50px rgb(15 15 18 / 0.28);
 `
 
