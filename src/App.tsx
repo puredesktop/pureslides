@@ -421,6 +421,8 @@ export function App(): React.ReactElement {
       const root = lifecycle.doc.path
       return root ? { resourcePath: root, files: (lifecycleSerializeRef.current?.() ?? []).filter(file => file.name !== `${DECK_ASSETS_DIR}/.keep`).map(file => ({ name: file.name, content: file.content })) } : null
     },
+    // Let go by the live copy: the deck on screen is saved as it always was, so a slide edited just before is kept.
+    onEnded: () => lifecycleRef.current.markDirty(),
   })
   const liveRef = useRef(live)
   liveRef.current = live
