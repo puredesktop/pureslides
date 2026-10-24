@@ -36,9 +36,9 @@ export function previewCapFor(name: string): number {
 // Scan source ranges rather than serializing a DOM: unrelated saved markup stays
 // byte-for-byte intact. Consume whole attributes so copy in alt/title is not CSS.
 const OPEN_TAG = /<[a-z][a-z0-9:-]*(?:[^"'<>]|"[^"]*"|'[^']*')*>/i
-const HTML_PARTS = /<!--[\s\S]*?(?:-->|$)|<(script|textarea|title)\b(?:[^"'<>]|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1\s*>|<style\b(?:[^"'<>]|"[^"]*"|'[^']*')*>[\s\S]*?<\/style\s*>|<[a-z][a-z0-9:-]*(?:[^"'<>]|"[^"]*"|'[^']*')*>/gi
+const HTML_PARTS = /<!--[\s\S]*?(?:-->|$)|<(script|textarea|title)(?=[\s/>])(?:[^"'<>]|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1\s*>|<style(?=[\s/>])(?:[^"'<>]|"[^"]*"|'[^']*')*>[\s\S]*?<\/style\s*>|<[a-z][a-z0-9:-]*(?:[^"'<>]|"[^"]*"|'[^']*')*>/gi
 const ATTRIBUTES = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'`=<>]+)))?/g
-const CSS_URLS = /\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s"'()]+))\s*\)/gi
+const CSS_URLS = /\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\(\s*(?:"([^"]*)"|'([^']*)'|&(?:quot|#34|#x22);([^&]*)&(?:quot|#34|#x22);|&(?:apos|#39|#x27);([^&]*)&(?:apos|#39|#x27);|([^\s"'()]+))\s*\)/gi
 
 type AssetReference = { path: string; raw: string; name: string; start: number; end: number; unquoted: boolean }
 
@@ -57,7 +57,7 @@ function assetReference(path: string, start: number, unquoted = false): AssetRef
 
 function* cssReferences(css: string, offset: number): Generator<AssetReference> {
   for (const match of css.matchAll(CSS_URLS)) {
-    const path = match[1] ?? match[2] ?? match[3]
+    const path = match[1] ?? match[2] ?? match[3] ?? match[4] ?? match[5]
     if (!path) continue
     const reference = assetReference(path, offset + match.index! + match[0].indexOf(path))
     if (reference) yield reference
@@ -75,14 +75,14 @@ function* assetReferences(html: string): Generator<AssetReference> {
       if (!value) continue
       const prefix = attr[0].match(/^[^=]+=\s*["']?/)![0].length
       const offset = part.index! + head + attr.index! + prefix
-      if (/^(src|href|poster)$/i.test(attr[1])) {
+      if (/^(?:src|href|poster|xlink:href)$/i.test(attr[1])) {
         const reference = assetReference(value, offset, attr[4] !== undefined)
         if (reference) yield reference
       } else if (/^style$/i.test(attr[1])) {
         yield* cssReferences(value, offset)
       }
     }
-    if (/^<style\b/i.test(tag)) {
+    if (/^<style(?=[\s/>])/i.test(tag)) {
       yield* cssReferences(part[0].slice(tag.length, part[0].search(/<\/style\s*>$/i)), part.index! + tag.length)
     }
   }

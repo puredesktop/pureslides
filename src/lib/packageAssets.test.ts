@@ -112,6 +112,27 @@ describe('package assets in the preview', () => {
     expect(inline).toContain("content: 'url(assets/copy.png)'")
   })
 
+  it('finds SVG image references written with xlink:href', () => {
+    const html = `<svg><image xlink:href="assets/logo.png" width="10" height="10"/></svg>`
+    const previews = { 'logo.png': 'data:image/png;base64,AA==' }
+    expect(referencedAssetNames(html)).toEqual(['logo.png'])
+    expect(inlineAssetUrls(html, previews)).toContain('xlink:href="data:image/png;base64,AA=="')
+  })
+
+  it('reads a root background that serialization wrote with entity quotes', () => {
+    const html = `<div id="deck" style="background:url(&quot;assets/bg.png&quot;)"></div>`
+    const previews = { 'bg.png': 'data:image/png;base64,AA==' }
+    expect(referencedAssetNames(html)).toEqual(['bg.png'])
+    const inline = inlineAssetUrls(html, previews)
+    expect(inline).toContain('data:image/png;base64,AA==')
+    expect(inline).not.toContain('assets/bg.png')
+  })
+
+  it('does not treat custom elements as raw-text blocks', () => {
+    const html = `<style-card></style-card><img src="assets/logo.png"></style><title-bar></title-bar><img src="assets/next.png"></title>`
+    expect(referencedAssetNames(html)).toEqual(['logo.png', 'next.png'])
+  })
+
   it('gives videos a larger cap than pictures', () => {
     expect(previewCapFor('demo.mp4')).toBeGreaterThan(previewCapFor('logo.png'))
   })
