@@ -50,12 +50,12 @@ describe('printableHtml', () => {
   it('does not let a clip name inject markup into the print', () => {
     const deck = DECK.replace(
       '<h1>One</h1>',
-      '<h1>One</h1><video src="assets/<b>evil</b>.mp4"></video>',
+      '<h1>One</h1><video src="assets/evil<b>clip.mp4"></video>',
     )
     const print = printableHtml(deck)
     const doc = new DOMParser().parseFromString(print, 'text/html')
     expect(doc.querySelector('b')).toBeNull()
-    expect(doc.querySelector('[data-video-placeholder]')?.textContent).toContain('evil')
+    expect(doc.querySelector('[data-video-placeholder]')?.textContent).toContain('evil<b>clip.mp4')
   })
 
   it('carries the deck’s own styles across', () => {
