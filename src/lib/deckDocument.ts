@@ -81,17 +81,24 @@ export function withGeometry(
     root.setAttribute('data-height', String(Math.round(patch.height)))
   }
   const geometry = geometryFromHtml(`<!DOCTYPE html>\n${doc.documentElement.outerHTML}`)
-  root.setAttribute(
-    'style',
-    `width: ${geometry.width}px; height: ${geometry.height}px; position: relative; overflow: hidden`,
-  )
+  // Resize the canvas without discarding the author's layout, colors or type.
+  const style = (root as HTMLElement).style
+  style.width = `${geometry.width}px`
+  style.height = `${geometry.height}px`
+  style.position = 'relative'
+  style.overflow = 'hidden'
   return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}\n`
+}
+
+/** Titles are plain text in both the document head and the starter slide. */
+function escapeHtmlText(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 /** A starter slide, marked so drafting knows nobody wrote it. */
 export function createStarterSlideHtml(title = DEFAULT_DECK_TITLE): string {
   return `<div data-slide data-block="starter" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #ffffff; text-align: center">
-      <h1 style="margin: 0; font-size: 64px; font-weight: 800; letter-spacing: -0.03em; color: #1b1b1e">${title}</h1>
+      <h1 style="margin: 0; font-size: 64px; font-weight: 800; letter-spacing: -0.03em; color: #1b1b1e">${escapeHtmlText(title)}</h1>
       <p style="margin: 0; font-size: 22px; color: #6d6f73">Write slides in HTML. Present them. Export a PDF.</p>
     </div>`
 }
@@ -105,7 +112,7 @@ export function createDefaultDeckDocument(
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>${title}</title>
+    <title>${escapeHtmlText(title)}</title>
     <style>
       html, body { margin: 0; padding: 0; background: #0e0e11; }
       #deck { font-family: Archivo, system-ui, -apple-system, sans-serif; }

@@ -56,4 +56,22 @@ describe('checkDeck', () => {
     const codes = checkDeck(deck).filter(finding => finding.code.includes('video')).map(finding => [finding.code, finding.slide])
     expect(codes).toEqual([['video-empty', 0], ['remote-video', 1], ['video-format', 2]])
   })
+
+  it('checks builds, images and clips in an imported deck whose root is the slide', () => {
+    const findings = checkDeck(
+      DECK('<h1>Imported</h1><p data-step="3">Later</p><img src="https://example.com/a.png"><video></video>'),
+    )
+    expect(findings.map(f => [f.code, f.slide])).toEqual([
+      ['step-gap', 0],
+      ['remote-image', 0],
+      ['video-empty', 0],
+    ])
+  })
+
+  it('warns when a later image needs the network after a local first image', () => {
+    const findings = checkDeck(
+      DECK('<div data-slide><img src="assets/local.png"><img src="https://example.com/remote.png"></div>'),
+    )
+    expect(findings.some(f => f.code === 'remote-image' && f.slide === 0)).toBe(true)
+  })
 })
