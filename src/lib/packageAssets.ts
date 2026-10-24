@@ -33,27 +33,64 @@ export function previewCapFor(name: string): number {
   return VIDEO_NAME.test(name) ? PREVIEW_VIDEO_MAX_BYTES : PREVIEW_ASSET_MAX_BYTES
 }
 
-const REFERENCE_PATTERN =
-  /(src|href|poster)=("|')(?:\.\/)?assets\/([^"']+)\2|url\((?:"|')?(?:\.\/)?assets\/([^"')]+)(?:"|')?\)/g
+// Scan source ranges rather than serializing a DOM: unrelated saved markup stays
+// byte-for-byte intact. Consume whole attributes so copy in alt/title is not CSS.
+const OPEN_TAG = /<[a-z][a-z0-9:-]*(?:[^"'<>]|"[^"]*"|'[^']*')*>/i
+const HTML_PARTS = /<!--[\s\S]*?(?:-->|$)|<(script|textarea|title)\b(?:[^"'<>]|"[^"]*"|'[^']*')*>[\s\S]*?<\/\1\s*>|<style\b(?:[^"'<>]|"[^"]*"|'[^']*')*>[\s\S]*?<\/style\s*>|<[a-z][a-z0-9:-]*(?:[^"'<>]|"[^"]*"|'[^']*')*>/gi
+const ATTRIBUTES = /([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'`=<>]+)))?/g
+const CSS_URLS = /\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\(\s*(?:"([^"]*)"|'([^']*)'|([^\s"'()]+))\s*\)/gi
 
-/**
- * Every `assets/<name>` the document references — src, href, poster and
- * CSS `url()`. Names come back decoded and unique, in document order.
- */
-export function referencedAssetNames(html: string): string[] {
-  const names: string[] = []
-  for (const match of html.matchAll(REFERENCE_PATTERN)) {
-    const raw = (match[3] ?? match[4] ?? '').split(/[?#]/)[0]
-    if (!raw) continue
-    let name = raw
-    try {
-      name = decodeURIComponent(raw)
-    } catch {
-      /* keep it as written */
-    }
-    if (!names.includes(name)) names.push(name)
+type AssetReference = { path: string; raw: string; name: string; start: number; end: number; unquoted: boolean }
+
+function assetReference(path: string, start: number, unquoted = false): AssetReference | null {
+  // Attribute and function names ignore case; package paths do not.
+  if (!/^(?:\.\/)?assets\//.test(path)) return null
+  const raw = path.replace(/^(?:\.\/)?assets\//, '').split(/[?#]/)[0]
+  let name = raw
+  try {
+    name = decodeURIComponent(raw)
+  } catch {
+    /* keep it as written */
   }
-  return names
+  return { path, raw, name, start, end: start + path.length, unquoted }
+}
+
+function* cssReferences(css: string, offset: number): Generator<AssetReference> {
+  for (const match of css.matchAll(CSS_URLS)) {
+    const path = match[1] ?? match[2] ?? match[3]
+    if (!path) continue
+    const reference = assetReference(path, offset + match.index! + match[0].indexOf(path))
+    if (reference) yield reference
+  }
+}
+
+/** Discovery and replacement use the same source ranges, in document order. */
+function* assetReferences(html: string): Generator<AssetReference> {
+  for (const part of html.matchAll(HTML_PARTS)) {
+    if (part[0].startsWith('<!--') || part[1]) continue
+    const tag = part[0].match(OPEN_TAG)![0]
+    const head = tag.match(/^<[a-z][a-z0-9:-]*/i)![0].length
+    for (const attr of tag.slice(head, -1).matchAll(ATTRIBUTES)) {
+      const value = attr[2] ?? attr[3] ?? attr[4]
+      if (!value) continue
+      const prefix = attr[0].match(/^[^=]+=\s*["']?/)![0].length
+      const offset = part.index! + head + attr.index! + prefix
+      if (/^(src|href|poster)$/i.test(attr[1])) {
+        const reference = assetReference(value, offset, attr[4] !== undefined)
+        if (reference) yield reference
+      } else if (/^style$/i.test(attr[1])) {
+        yield* cssReferences(value, offset)
+      }
+    }
+    if (/^<style\b/i.test(tag)) {
+      yield* cssReferences(part[0].slice(tag.length, part[0].search(/<\/style\s*>$/i)), part.index! + tag.length)
+    }
+  }
+}
+
+/** Every package asset referenced by src, href, poster or CSS url(). */
+export function referencedAssetNames(html: string): string[] {
+  return [...new Set([...assetReferences(html)].map(reference => reference.name).filter(Boolean))]
 }
 
 /** Data URLs by asset name — the map the preview inlines from. */
@@ -139,18 +176,17 @@ export async function resolvePreviewAssets(
  */
 export function inlineAssetUrls(html: string, previews: PreviewAssetMap): string {
   if (!Object.keys(previews).length) return html
-  return html.replace(REFERENCE_PATTERN, (match, attr, quote, attrName, cssName) => {
-    const raw = ((attrName ?? cssName) as string).split(/[?#]/)[0]
-    let name = raw
-    try {
-      name = decodeURIComponent(raw)
-    } catch {
-      /* as written */
-    }
-    const data = previews[name] ?? previews[raw]
-    if (!data) return match
-    return attrName ? `${attr}=${quote}${data}${quote}` : `url(${data})`
-  })
+  let result = ''
+  let cursor = 0
+  for (const reference of assetReferences(html)) {
+    const data = previews[reference.name] ?? previews[reference.raw]
+    if (!data) continue
+    // Data URLs contain '=' padding, so unquoted HTML values need quotes.
+    const value = reference.unquoted ? `"${data}"` : data
+    result += html.slice(cursor, reference.start) + value
+    cursor = reference.end
+  }
+  return result + html.slice(cursor)
 }
 
 export interface DeinlineResult {
@@ -176,7 +212,12 @@ export function deinlineAssetUrls(html: string, previews: PreviewAssetMap): Dein
     .sort((a, b) => b[1].length - a[1].length)
   for (const [name, url] of entries) {
     if (!next.includes(url)) continue
-    next = next.split(url).join(`${DECK_ASSETS_DIR}/${name}`)
+    // A decoded filename may contain spaces, quotes or CSS delimiters.
+    // Restore a URL that is safe in both attributes and unquoted url().
+    const path = name.replace(/[\s\x00-\x1f\x7f"'()%?#&]/g, char =>
+      encodeURIComponent(char).replace(/['()]/g, delimiter =>
+        `%${delimiter.charCodeAt(0).toString(16).toUpperCase()}`))
+    next = next.split(url).join(`${DECK_ASSETS_DIR}/${path}`)
     restored.push(name)
   }
   const unknownDataUrls = (next.match(/data:[a-z0-9.+-]+\/[a-z0-9.+-]+;base64,/gi) ?? []).length
