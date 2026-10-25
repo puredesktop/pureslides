@@ -261,11 +261,14 @@ export function videoPlaceholder(doc: Document, video: Element): Element {
   const src =
     video.getAttribute('src') ?? video.querySelector('source')?.getAttribute('src') ?? ''
   const name = src.split(/[?#]/)[0].split('/').pop() ?? ''
+  // A clip's file name is text, not markup: a name like "<b>…</b>" must
+  // not inject elements into the print render.
+  const safeName = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   box.setAttribute(
     'style',
     `${style ? `${style}; ` : ''}display: grid; place-items: center; background: #101013; color: #d5d5db; font-family: system-ui, sans-serif`,
   )
-  box.innerHTML = `<div style="display: flex; flex-direction: column; align-items: center; gap: 12px"><svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="27" fill="none" stroke="currentColor" stroke-width="2"/><path d="M22 17l18 11-18 11z" fill="currentColor"/></svg><div style="font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8">Video${name ? ` · ${name}` : ''}</div></div>`
+  box.innerHTML = `<div style="display: flex; flex-direction: column; align-items: center; gap: 12px"><svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="27" fill="none" stroke="currentColor" stroke-width="2"/><path d="M22 17l18 11-18 11z" fill="currentColor"/></svg><div style="font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8">Video${safeName ? ` · ${safeName}` : ''}</div></div>`
   return box
 }
 

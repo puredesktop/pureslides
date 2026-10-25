@@ -48,7 +48,9 @@ export function checkDeck(html: string): CheckFinding[] {
     ]
   }
 
-  const slides = [...root.children].filter(child => child.matches('[data-slide]'))
+  const childSlides = [...root.children].filter(child => child.matches('[data-slide]'))
+  // Imported pages use the root as their one slide, just as the board does.
+  const slides = childSlides.length ? childSlides : root.children.length ? [root] : []
   if (!slides.length && !root.children.length) {
     findings.push({
       severity: 'error',
@@ -77,9 +79,10 @@ export function checkDeck(html: string): CheckFinding[] {
       }
     })
 
-    const image = slide.querySelector('img[src]')
-    const src = image?.getAttribute('src') ?? ''
-    if (src && /^https?:/i.test(src)) {
+    const hasRemoteImage = [...slide.querySelectorAll('img[src]')].some(image =>
+      /^https?:/i.test(image.getAttribute('src') ?? ''),
+    )
+    if (hasRemoteImage) {
       findings.push({
         severity: 'warning',
         code: 'remote-image',
