@@ -14,7 +14,12 @@ import { SlideFrame } from './SlideFrame'
 import { readElement } from '../lib/slides'
 import { deckSeconds } from '../lib/deckDocument'
 import type { Slide, SlideEdit } from '../lib/slides'
-import { blockCatalogue } from '../lib/blocks'
+import { blockCatalogue, findBlock } from '../lib/blocks'
+import { createDefaultDeckDocument } from '../lib/deckDocument'
+import { clearSlides, addSlide } from '../lib/slides'
+import { withDeckLook } from '../lib/deckLooks'
+import { LookPicker } from './LookPicker'
+import { containDialogFocus } from './dialogFocus'
 import type { BoardTab, DeckGeometry, PickedElement } from '../types'
 import type { MaterialItem } from '../lib/material'
 import type { DeckVerification, LayoutReport, SlideEvidenceMap } from '../lib/deckVerification'
@@ -27,6 +32,8 @@ export interface StatusAction {
 }
 
 interface SlideBoardViewProps {
+  look?: string
+  onLook?: (look: string) => void
   html: string
   slides: Slide[]
   geometry: DeckGeometry
@@ -74,6 +81,8 @@ interface SlideBoardViewProps {
 }
 
 export function SlideBoardView({
+  look = 'auto',
+  onLook,
   html,
   slides,
   geometry,
@@ -116,6 +125,8 @@ export function SlideBoardView({
 }: SlideBoardViewProps): React.ReactElement {
   const slide: Slide | undefined = slides[selected] ?? slides[0]
   const [request, setRequest] = useState('')
+  const [inspector, setInspector] = useState<'edit' | 'design'>('edit')
+  const [inspectorOpen, setInspectorOpen] = useState(true)
   const [step, setStep] = useState(0)
   const [picking, setPicking] = useState(false)
   /**
@@ -176,7 +187,10 @@ export function SlideBoardView({
       if (event.key === 'Escape') setPicker(false)
     }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      stripRef.current?.querySelector<HTMLButtonElement>('[data-add-slide]')?.focus()
+    }
   }, [picker])
 
   const pickElement = useCallback(
@@ -239,11 +253,10 @@ export function SlideBoardView({
         <Empty>
           <EmptyTitle>No slides yet</EmptyTitle>
           <EmptyBody>
-            A slide is a direct child of the deck root carrying data-slide. Add
-            one, or ask the assistant to draft the deck.
+            Start with a title, then build your story one slide at a time.
           </EmptyBody>
-          <PrimaryButton type="button" onClick={() => setPicker(true)}>
-            Add a slide
+          <PrimaryButton type="button" onClick={() => onAdd('title')}>
+            Add a title slide
           </PrimaryButton>
         </Empty>
       </Root>
@@ -268,14 +281,15 @@ export function SlideBoardView({
       : 'Only this slide changes.'
 
   return (
-    <Root {...deckAgentRefs(documentPath)}>
+    <Root $inspectorOpen={inspectorOpen && tab === 'slides'} {...deckAgentRefs(documentPath)}>
       {picker ? (
         <PickerScrim onClick={() => setPicker(false)}>
-          <PickerBox onClick={event => event.stopPropagation()}>
+          <PickerBox role="dialog" aria-modal="true" aria-label="Choose a slide layout" onKeyDown={containDialogFocus} onClick={event => event.stopPropagation()}>
             <PickerHead>
               <SectionHead>Add a slide</SectionHead>
               <span style={{ flex: 1 }} />
-              <Faint>Pick a shape — then edit it like any other slide.</Faint>
+              <Faint>A composition for every part of your story.</Faint>
+              <HtmlButton type="button" autoFocus onClick={() => setPicker(false)} aria-label="Close layout picker">Close</HtmlButton>
             </PickerHead>
             <PickerGrid>
               {blockCatalogue().map(block => (
@@ -288,6 +302,13 @@ export function SlideBoardView({
                     setPicker(false)
                   }}
                 >
+                  <LayoutPreview aria-hidden="true">
+                    <SlideFrame
+                      html={withDeckLook(addSlide(clearSlides(createDefaultDeckDocument().html), findBlock(block.id)!.html), look)}
+                      slide={0} step={block.steps}
+                      geometry={{ width: 1280, height: 720, deckId: 'deck' }} width={192}
+                    />
+                  </LayoutPreview>
                   <PickerName>{block.label}</PickerName>
                   <PickerNote>{block.description}</PickerNote>
                   {block.steps ? (
@@ -301,7 +322,7 @@ export function SlideBoardView({
           </PickerBox>
         </PickerScrim>
       ) : null}
-      <Stage>
+      <Stage inert={picker || undefined}>
         <Toolbar>
           <Tabs role="tablist" aria-label="Board">
             <TabButton
@@ -324,11 +345,11 @@ export function SlideBoardView({
             </TabButton>
           </Tabs>
           <span style={{ flex: 1 }} />
-          <Meta>
+          <ToolbarMeta>
             {slides.length} {slides.length === 1 ? 'slide' : 'slides'} ·{' '}
             {geometry.width}×{geometry.height}
             {slides.some(item => item.notes) ? ' · notes' : ''}
-          </Meta>
+          </ToolbarMeta>
           <VerifyBadge
             type="button"
             $state={verification.state}
@@ -354,6 +375,7 @@ export function SlideBoardView({
           <HtmlButton type="button" onClick={onEditHtml} title="The raw document — edits apply when you pause typing">
             HTML
           </HtmlButton>
+          <HtmlButton type="button" aria-pressed={inspectorOpen} onClick={() => setInspectorOpen(value => !value)} title="Show or hide slide inspector">Inspector</HtmlButton>
           <PresentButton type="button" onClick={onPresent}>
             <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
               <path d="M2.5 1.5l8 4.5-8 4.5z" />
@@ -381,6 +403,7 @@ export function SlideBoardView({
                 endDrag()
               }}
             >
+              <StripHeading><SectionHead>Outline</SectionHead><Meta>{slides.length}</Meta></StripHeading>
               {slides.map(item => (
                 <CardSlot key={item.index}>
                   {dropBefore === item.index ? <DropLine /> : null}
@@ -465,6 +488,7 @@ export function SlideBoardView({
               ))}
               {dropBefore === slides.length ? <DropLine /> : null}
               <AddCard
+                data-add-slide
                 type="button"
                 onClick={() => setPicker(true)}
                 onDragOver={event => {
@@ -496,6 +520,7 @@ export function SlideBoardView({
                   />
                 </SelectedStage>
                 <Transport>
+                  <PositionLabel>{String(slide.index + 1).padStart(2, '0')} <Faint>/ {String(slides.length).padStart(2, '0')}</Faint></PositionLabel>
                   {slide.steps ? (
                     <>
                       <TransportButton
@@ -533,7 +558,7 @@ export function SlideBoardView({
                       </Mono>
                     </>
                   ) : (
-                    <Mono>No build — everything is on at once</Mono>
+                    <Mono>All content visible</Mono>
                   )}
                   {overlaps(slide.index) ? (
                     <Warn title="Two elements that both carry content are sitting on top of each other. Scaling cannot fix this — the slide's layout has to change.">
@@ -559,14 +584,24 @@ export function SlideBoardView({
         )}
       </Stage>
 
-      {tab === 'slides' && slide ? (
-        <Rail>
+      {tab === 'slides' && slide && inspectorOpen ? (
+        <Rail inert={picker || undefined}>
           <StageHead>
             <SectionHead>Slide {String(slide.index + 1).padStart(2, '0')}</SectionHead>
             <span style={{ flex: 1 }} />
             <Meta>{slide.block || 'slide'}</Meta>
           </StageHead>
 
+          <InspectorTabs role="tablist" aria-label="Slide inspector">
+            <TabButton type="button" role="tab" aria-selected={inspector === 'edit'} data-active={inspector === 'edit' ? '' : undefined} onClick={() => setInspector('edit')}>Content</TabButton>
+            <TabButton type="button" role="tab" aria-selected={inspector === 'design'} data-active={inspector === 'design' ? '' : undefined} onClick={() => setInspector('design')}>Design</TabButton>
+          </InspectorTabs>
+          {inspector === 'design' ? <DesignSection>
+            <DesignTitle>Set the tone.</DesignTitle>
+            <DesignNote>A coordinated palette and type pairing for your presentation.</DesignNote>
+            {onLook ? <LookPicker value={look} onChange={onLook} /> : null}
+            <DesignNote>Updates layouts using presentation styles. Custom colors and fonts stay as authored.</DesignNote>
+          </DesignSection> : <>
           <Ops>
             <OpButton type="button" disabled={slide.index === 0} onClick={() => onMove(slide.index, slide.index - 1)}>
               ↑ Move
@@ -646,6 +681,7 @@ export function SlideBoardView({
             />
           </Field>
 
+          </>}
           <AskBlock>
             <SectionHead>{scopeHead}</SectionHead>
             <Scope>
@@ -872,14 +908,22 @@ const chrome = (kind: string, extra: Record<string, string> = {}): Record<string
 })
 
 /** The stage fills the frame; the rail is the platform's right sidebar. */
-const Root = styled.div`
+const Root = styled.div<{ $inspectorOpen?: boolean }>`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) ${props => props.$inspectorOpen ? '288px' : '0px'};
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  color: var(--platform-colors-text);
+  background: var(--platform-colors-app-viewport, var(--pure-chrome-well));
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid ${ACCENT}; outline-offset: 2px; }
+  button { transition: background 120ms ease, border-color 120ms ease; }
+  @media (max-width: 1000px) { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  @media (prefers-reduced-motion: reduce) { button { transition: none; } }
 `
 
 const Stage = styled.div`
+  @media (max-width: 1000px) { min-height: 640px; }
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -888,7 +932,7 @@ const Stage = styled.div`
 
 /** The one format bar above the board — platform toolbar, 36 tall. */
 const Toolbar = styled.div.attrs(chrome('toolbar'))`
-  gap: 6px;
+  && { gap: 6px; min-height: 52px; height: auto; flex-wrap: wrap; padding: 10px 16px; background: var(--platform-colors-elevated); }
 `
 
 const StageHead = styled.div`
@@ -898,25 +942,27 @@ const StageHead = styled.div`
 `
 
 const Tabs = styled.div`
-  display: flex;
-  gap: 2px;
+  display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--pure-chrome-well);
 `
 
-const TabButton = styled.button.attrs(chrome('toolbar-control'))``
+const TabButton = styled.button.attrs(chrome('toolbar-control'))`
+  && { border-radius: 6px; }
+  &&[data-active] { background: var(--platform-colors-elevated); color: var(--platform-colors-text); box-shadow: 0 1px 3px rgb(15 23 42 / .08); }
+`
 
 const Body = styled.div`
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
+  @media (max-width: 640px) { grid-template-columns: minmax(0, 1fr); grid-template-rows: 154px minmax(0, 1fr) auto; }
 `
 
 /** Down, not across: a deck is a stack. The strip is the app's left sidebar. */
 const Strip = styled.div.attrs(chrome('sidebar'))`
-  grid-row: 1 / -1;
-  gap: 12px;
-  padding: 12px var(--pure-chrome-inset);
+  && { grid-row: 1 / -1; width: 200px; gap: 18px; padding: 16px; background: var(--platform-colors-surface); }
+  @media (max-width: 640px) { && { grid-row: auto; width: 100%; flex-direction: row; overflow: auto hidden; gap: 12px; padding: 12px; } > div { flex: 0 0 168px; } > div:first-child { display: none; } }
 `
 
 const PickerScrim = styled.div`
@@ -929,7 +975,7 @@ const PickerScrim = styled.div`
 `
 
 const PickerBox = styled.div`
-  width: min(720px, calc(100vw - 48px));
+  width: min(760px, calc(100vw - 32px));
   max-height: calc(100vh - 96px);
   overflow-y: auto;
   display: flex;
@@ -937,9 +983,10 @@ const PickerBox = styled.div`
   gap: 14px;
   padding: 22px;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 0;
-  background: var(--pure-chrome-surface);
-  box-shadow: 0 18px 50px rgb(15 15 18 / 0.28);
+  border-radius: 8px;
+  background: var(--platform-colors-elevated);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgb(15 23 42 / 0.24);
 `
 
 const PickerHead = styled.div`
@@ -950,17 +997,19 @@ const PickerHead = styled.div`
 
 const PickerGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
 `
 
 const PickerCard = styled.button`
+  min-width: 0;
+  &:hover, &:focus-visible { border-color: ${ACCENT}; background: var(--pure-chrome-hover); }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 14px;
+  padding: 10px;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 0;
+  border-radius: 8px;
   background: var(--pure-chrome-surface);
   color: var(--platform-colors-text);
   font: inherit;
@@ -995,7 +1044,7 @@ const CardSlot = styled.div`
 /** Where the slide will land — drawn in the gap, not on a card. */
 const DropLine = styled.div`
   height: 3px;
-  border-radius: 0;
+  border-radius: 8px;
   background: ${ACCENT};
 `
 
@@ -1019,7 +1068,7 @@ const Card = styled.button<{ $selected?: boolean; $dragging?: boolean }>`
 const CardFrame = styled.span<{ $selected?: boolean }>`
   position: relative;
   display: block;
-  border-radius: 0;
+  border-radius: 8px;
   overflow: hidden;
   outline: ${props =>
     props.$selected ? `2px solid ${ACCENT}` : '1px solid var(--pure-chrome-line)'};
@@ -1031,7 +1080,7 @@ const CardBadge = styled.span<{ $selected?: boolean }>`
   position: absolute;
   top: 5px;
   left: 5px;
-  border-radius: 0;
+  border-radius: 8px;
   padding: 1px 6px;
   font-family: var(--platform-typography-font-family-mono);
   font-size: 9px;
@@ -1049,7 +1098,7 @@ const CardTick = styled.span<{ $on: boolean }>`
   place-items: center;
   border: 1px solid
     ${props => (props.$on ? ACCENT : 'var(--pure-chrome-line)')};
-  border-radius: 0;
+  border-radius: 8px;
   background: ${props => (props.$on ? ACCENT : 'rgb(255 255 255 / 0.88)')};
   color: var(--pure-chrome-on-accent);
   font-size: 10px;
@@ -1070,7 +1119,7 @@ const Mark = styled.span`
   display: grid;
   place-items: center;
   background: rgb(255 255 255 / 0.86);
-  border-radius: 0;
+  border-radius: 8px;
   padding: 1px;
 `
 
@@ -1087,7 +1136,7 @@ const CardLabel = styled.span<{ $selected?: boolean }>`
 const AddCard = styled.button`
   flex: none;
   border: 1px dashed var(--pure-chrome-line);
-  border-radius: 0;
+  border-radius: 8px;
   background: none;
   padding: 9px;
   font: inherit;
@@ -1102,7 +1151,8 @@ const Selected = styled.div`
   gap: 10px;
   min-width: 0;
   min-height: 0;
-  padding: 20px 20px 0;
+  padding: 24px 24px 0;
+  @media (max-width: 640px) { padding: 12px 12px 0; }
 `
 
 const SelectedStage = styled.div`
@@ -1113,13 +1163,16 @@ const SelectedStage = styled.div`
   min-height: 0;
   display: grid;
   place-items: center;
-  border-radius: 0;
+  border-radius: 8px;
   background: var(--pure-chrome-well);
-  padding: 20px;
+  padding: 24px;
+  @media (max-width: 640px) { padding: 12px; }
+  > div { box-shadow: 0 10px 40px rgb(15 23 42 / .12), 0 1px 3px rgb(15 23 42 / .08); }
 `
 
 const Transport = styled.div`
   flex: none;
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1193,6 +1246,7 @@ const AssetsPane = styled.div`
 
 const Foot = styled.div`
   grid-column: 2;
+  @media (max-width: 640px) { grid-column: 1; }
   display: flex;
   justify-content: flex-start;
   align-items: center;
@@ -1209,7 +1263,7 @@ const StatusButton = styled.button`
   margin-left: 10px;
   padding: 1px 8px;
   border: 1px solid ${ACCENT};
-  border-radius: 0;
+  border-radius: 8px;
   background: none;
   color: ${ACCENT};
   font-family: var(--platform-typography-font-family-mono);
@@ -1266,8 +1320,8 @@ const Sep = styled.span`
 
 /** The slide's inspector: the platform's right sidebar. */
 const Rail = styled.aside.attrs(chrome('sidebar', { 'data-side': 'right' }))`
-  gap: 12px;
-  padding: 12px var(--pure-chrome-inset) 16px;
+  && { width: 288px; gap: 18px; padding: 20px 18px; background: var(--platform-colors-elevated); }
+  @media (max-width: 1000px) { && { width: 100%; border-left: 0; border-top: 1px solid var(--pure-chrome-line); overflow: visible; } }
 `
 
 const SectionHead = styled.div.attrs(chrome('section-label'))`
@@ -1285,7 +1339,7 @@ const Warn = styled.span`
   font-size: var(--pure-chrome-meta-size);
   padding: 2px 7px;
   margin-left: 10px;
-  border-radius: 0;
+  border-radius: 8px;
   color: var(--platform-colors-danger);
   background: var(--platform-colors-danger-surface, rgb(180 52 14 / 0.1));
 `
@@ -1356,7 +1410,7 @@ const AskBlock = styled.div`
   flex-direction: column;
   gap: 8px;
   border-top: 1px solid var(--pure-chrome-line);
-  padding-top: 10px;
+  padding-top: 18px;
 `
 
 const Scope = styled.div`
@@ -1482,7 +1536,7 @@ const AssetThumb = styled.img`
   object-fit: contain;
   display: block;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 0;
+  border-radius: 8px;
   background: var(--pure-chrome-well);
 `
 
@@ -1492,7 +1546,7 @@ const AssetKind = styled.span`
   display: grid;
   place-items: center;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 0;
+  border-radius: 8px;
   background: var(--pure-chrome-surface);
   font-family: var(--platform-typography-font-family-mono);
   font-size: 9px;
@@ -1620,3 +1674,12 @@ const EmptyBody = styled.div`
   color: var(--pure-chrome-soft);
   max-width: 44ch;
 `
+
+const ToolbarMeta = styled(Meta)`@media (max-width: 1280px) { display: none; }`
+const StripHeading = styled.div`display: flex; align-items: center; justify-content: space-between;`
+const PositionLabel = styled.span`font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;`
+const InspectorTabs = styled(Tabs)`> button { flex: 1; justify-content: center; }`
+const DesignSection = styled.div`display: flex; flex-direction: column; gap: 14px;`
+const DesignTitle = styled.div`font-size: 20px; font-weight: 600; letter-spacing: -.035em;`
+const DesignNote = styled.p`margin: 0; font-size: 12px; line-height: 1.5; color: var(--pure-chrome-soft);`
+const LayoutPreview = styled.span`display: flex; justify-content: center; overflow: hidden; width: 100%; margin-bottom: 8px; border-radius: 5px; pointer-events: none; background: var(--pure-chrome-well);`

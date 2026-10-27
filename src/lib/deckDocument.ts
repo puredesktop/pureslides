@@ -1,3 +1,4 @@
+import { lookDeclarations } from './deckLooks'
 /**
  * The deck document, and its package.
  *
@@ -97,9 +98,10 @@ function escapeHtmlText(text: string): string {
 
 /** A starter slide, marked so drafting knows nobody wrote it. */
 export function createStarterSlideHtml(title = DEFAULT_DECK_TITLE): string {
-  return `<div data-slide data-block="starter" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #ffffff; text-align: center">
-      <h1 style="margin: 0; font-size: 64px; font-weight: 800; letter-spacing: -0.03em; color: #1b1b1e">${escapeHtmlText(title)}</h1>
-      <p style="margin: 0; font-size: 22px; color: #6d6f73">Write slides in HTML. Present them. Export a PDF.</p>
+  return `<div data-slide data-block="starter" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 28px; padding: 80px 100px; background: var(--slide-bg, #f8f9fc); color: var(--slide-ink, #192338)">
+      <div style="font: 600 20px system-ui, sans-serif; letter-spacing: .18em; text-transform: uppercase; color: var(--slide-accent, #3459d4)">A new perspective</div>
+      <h1 style="margin: 0; max-width: 16ch; font-size: 76px; line-height: 1.06; font-family: var(--slide-heading-font, system-ui, sans-serif); font-weight: var(--slide-heading-weight, 700); letter-spacing: -0.04em">${escapeHtmlText(title)}</h1>
+      <p style="margin: 0; font: 26px/1.5 system-ui, sans-serif; color: var(--slide-muted, #53617a)">Your next great story starts here.</p>
     </div>`
 }
 
@@ -121,7 +123,7 @@ ${BUILD_CSS}
     </style>
   </head>
   <body>
-    <div id="deck" data-deck-id="${DEFAULT_DECK_ID}" data-width="${DEFAULT_WIDTH}" data-height="${DEFAULT_HEIGHT}" style="width: ${DEFAULT_WIDTH}px; height: ${DEFAULT_HEIGHT}px; position: relative; overflow: hidden">
+    <div id="deck" data-deck-id="${DEFAULT_DECK_ID}" data-width="${DEFAULT_WIDTH}" data-height="${DEFAULT_HEIGHT}" data-look="auto" style="${lookDeclarations('auto')} width: ${DEFAULT_WIDTH}px; height: ${DEFAULT_HEIGHT}px; position: relative; overflow: hidden">
     ${createStarterSlideHtml(title)}
     </div>
   </body>

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { DeckAgentToolContext } from './agents/catalog'
 const mocks = vi.hoisted(() => ({
   previews: {} as Record<string, string>,
+  changeLook: null as unknown as (look: string) => void,
   binary: vi.fn(),
   resource: null as { path: string } | null,
   clear: vi.fn(),
@@ -77,7 +78,8 @@ vi.mock('./bridge/platformBridge', () => ({
   isStandaloneDevMode: () => false,
 }))
 vi.mock('./components/SlideBoardView', () => ({
-  SlideBoardView: ({ previews }: { previews: Record<string, string> }) => {
+  SlideBoardView: ({ previews, onLook }: { previews: Record<string, string>; onLook: (look: string) => void }) => {
+    mocks.changeLook = onLook
     mocks.previews = previews
     return null
   },
@@ -242,4 +244,17 @@ it('never lets delayed assets from A replace B previews with the same filename',
   expect(mocks.previews['logo.png']).toBe('data:image/png;base64,B')
   await act(async () => finish('data:image/png;base64,A'))
   expect(mocks.previews['logo.png']).toBe('data:image/png;base64,B')
+})
+
+it('persists a style change through the document lifecycle without rewriting the slides', async () => {
+  await render('/A.deck')
+  const before = new DOMParser().parseFromString(mocks.context.document.html, 'text/html').querySelector('[data-deck-id]')!.innerHTML
+  await act(async () => mocks.changeLook('paper'))
+  const changed = new DOMParser().parseFromString(mocks.context.document.html, 'text/html').querySelector('[data-deck-id]')!
+  expect(changed.getAttribute('data-look')).toBe('paper')
+  expect(changed.innerHTML).toBe(before)
+  await render('/B.deck')
+  expect(files.get('/A.deck/index.html')).toContain('data-look="paper"')
+  expect(JSON.parse(files.get('/A.deck/manifest.json')!).look).toBe('paper')
+  expect(files.get('/B.deck/index.html')).toBe(htmlB)
 })
