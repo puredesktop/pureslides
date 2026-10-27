@@ -40,6 +40,7 @@ export function SlideFrame({
   live = false,
   dropTarget = false,
   onPick,
+  onClearSelection,
   onEdit,
   onLayout,
   onKeyDown,
@@ -67,6 +68,7 @@ export function SlideFrame({
   /** Presentation controls forwarded from the focused opaque slide iframe. */
   onKeyDown?: (key: string) => void
   dropTarget?: boolean
+  onClearSelection?: () => void
   onPick?: (
     path: string,
     label: string,
@@ -136,6 +138,7 @@ export function SlideFrame({
       if (data?.type === 'pureslides:layout') {
         onLayout?.(data.slide ?? 0, layoutReportFrom(data), html)
       }
+      if (data?.type === 'pureslides:clear-selection') onClearSelection?.()
       if (data?.type === 'pureslides:picked' && typeof data.path === 'string') {
         onPick?.(
           data.path,
@@ -164,7 +167,7 @@ export function SlideFrame({
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [onPick, onEdit, onLayout, onKeyDown, html, shown])
+  }, [onPick, onClearSelection, onEdit, onLayout, onKeyDown, html, shown])
 
   // `ready` is in every dep list: a frame that has just loaded has not seen
   // anything sent before it existed.
