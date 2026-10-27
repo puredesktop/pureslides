@@ -1,3 +1,4 @@
+import { DesignBriefImport } from '@purescience/platform-ui/components/common/documents/DesignBriefImport'
 /**
  * Starting a deck, as four questions instead of a screen.
  *
@@ -112,6 +113,7 @@ export function NewDeckWizard({
           />
         </Field>
 
+        <DesignBriefImport value={brief} target="slides" disabled={busy} onImport={value => onBrief(value)} />
         <Field>
           <Label>Files</Label>
           {material.length ? (

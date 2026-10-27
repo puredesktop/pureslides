@@ -1,3 +1,4 @@
+import { DesignBriefImport } from '@purescience/platform-ui/components/common/documents/DesignBriefImport'
 import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
 import { ASSET_ROLES, type MaterialItem } from '../lib/material'
@@ -165,6 +166,7 @@ export function AssetsPane({
 
 
 
+        <DesignBriefImport value={brief} target="slides" disabled={busy !== null} onImport={onBrief} />
         <span style={{ flex: 1 }} />
 
         <Actions>
