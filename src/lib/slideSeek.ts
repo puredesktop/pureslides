@@ -634,7 +634,8 @@ const PICKING = `
     style.textContent =
       '.__pv-picked{outline:' + w + 'px solid #4f8ef7 !important;outline-offset:' + pad + 'px !important;background-color:rgba(79,142,247,.14) !important}' +
       '.__pv-hover{outline:' + w + 'px dashed rgba(79,142,247,.85) !important;outline-offset:' + pad + 'px !important}' +
-      '.__pv-picking, .__pv-picking *{cursor:crosshair !important}' +
+      '.__pv-picking, .__pv-picking *{cursor:default !important}' +
+      '.__pv-picking [contenteditable], .__pv-picking [contenteditable] *{cursor:text !important}' +
       '.__pv-tag{position:absolute;z-index:2147483647;pointer-events:none;background:#4f8ef7;color:#fff;' +
         'border-radius:' + pad + 'px;padding:' + pad + 'px ' + (pad * 2) + 'px;font-size:' + font + 'px;' +
         'font-family:ui-monospace,Menlo,monospace;line-height:1.2;white-space:nowrap;max-width:60%;overflow:hidden;text-overflow:ellipsis}';
@@ -714,7 +715,8 @@ const PICKING = `
   document.addEventListener('mouseover', function (event) {
     if (!picking) return;
     clearHover();
-    if (event.target && event.target.classList) event.target.classList.add('__pv-hover');
+    var found = pathOf(event.target);
+    if (found && found.path && event.target.classList) event.target.classList.add('__pv-hover');
   }, true);
 
   document.addEventListener('click', function (event) {
@@ -725,12 +727,16 @@ const PICKING = `
     event.preventDefault();
     event.stopPropagation();
     var found = pathOf(el);
-    if (!found) return;
+    if (!found || !found.path) {
+      parent.postMessage({ type: 'pureslides:clear-selection' }, '*');
+      return;
+    }
     // A second click on the picked element starts typing in the slide
     // itself — editing directly, no form in the middle. Text leaves only:
     // typing into a container would eat its elements.
-    if (el && el.classList && el.classList.contains('__pv-picked') &&
-        el.children.length === 0 && el.tagName !== 'IMG') {
+    if (!(event.shiftKey || event.metaKey || event.ctrlKey) &&
+        el && el.classList && el.classList.contains('__pv-picked') &&
+        el.children.length === 0 && !/^(IMG|VIDEO|AUDIO|IFRAME|INPUT|HR|BR)$/.test(el.tagName)) {
       startEdit(el, found);
       return;
     }
@@ -790,7 +796,13 @@ const PICKING = `
       var holder = document.createElement('div');
       holder.innerHTML = editingOriginal;
       if (holder.firstElementChild) el.replaceWith(holder.firstElementChild);
+      highlight(picked, pickedSlide);
+      event.preventDefault();
       event.stopPropagation();
+    } else if (event.key === 'Escape' && picking) {
+      event.preventDefault();
+      event.stopPropagation();
+      parent.postMessage({ type: 'pureslides:clear-selection' }, '*');
     }
   }, true);
 `

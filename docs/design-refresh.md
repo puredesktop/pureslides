@@ -28,3 +28,15 @@ fixture. Browser viewport automation stalled during the explicit 720px check;
 installed-shell filesystem, paid generation, native full screen and exported
 file visual parity still need an installed-desktop pass. No user decks were
 opened and no model requests were sent.
+
+The editing canvas now selects elements directly, with no Pick elements mode
+button. Shift/Cmd/Ctrl-click adds or removes elements; a second plain click
+edits selected leaf text. Blank slide space or Escape clears selection.
+Escape while typing first cancels that text edit and restores its selection.
+Selection opens the Content inspector. Presentation and thumbnail frames keep
+selection disabled, including normal presentation media interaction.
+
+Direct-selection verification: 44 focused tests pass (selection runtime, frame
+message ownership, presentation controls, export). Typecheck and production
+build pass, with the existing bundle-size warning. Browser checks confirmed
+first-click selection, additive selection and Escape in the real board fixture.

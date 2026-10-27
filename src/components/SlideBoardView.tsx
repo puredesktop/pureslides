@@ -128,7 +128,6 @@ export function SlideBoardView({
   const [inspector, setInspector] = useState<'edit' | 'design'>('edit')
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [step, setStep] = useState(0)
-  const [picking, setPicking] = useState(false)
   /**
    * Dragging a card. `dropBefore` is a GAP, not a card: 0 is above the first
    * slide and slides.length is below the last, which is the only way to
@@ -200,8 +199,10 @@ export function SlideBoardView({
         onElementSelection([{ path, label }])
         return
       }
+      setInspector('edit')
+      setInspectorOpen(true)
       const already = elementSelection.some(item => item.path === path)
-      if (already) {
+      if (already && additive) {
         onElementSelection(elementSelection.filter(item => item.path !== path))
         return
       }
@@ -502,7 +503,8 @@ export function SlideBoardView({
 
             {slide ? (
               <Selected>
-                <SelectedStage ref={stageRef} {...slideAgentRefs(slide.index, slide.headline)}>
+                <SelectedStage ref={stageRef} {...slideAgentRefs(slide.index, slide.headline)}
+                  onClick={event => { if (event.target === event.currentTarget) onElementSelection([]) }}>
                   <SlideFrame
                     html={html}
                     slide={slide.index}
@@ -512,7 +514,8 @@ export function SlideBoardView({
                     previews={previews}
                     live
                     dropTarget
-                    picking={picking}
+                    picking
+                    onClearSelection={() => onElementSelection([])}
                     highlight={elementSelection.map(item => item.path)}
                     onPick={pickElement}
                     onEdit={onEditElement}
@@ -566,9 +569,7 @@ export function SlideBoardView({
                     </Warn>
                   ) : null}
                   <span style={{ flex: 1 }} />
-                  <PickToggle type="button" $on={picking} onClick={() => setPicking(!picking)}>
-                    {picking ? 'Picking elements' : 'Pick elements'}
-                  </PickToggle>
+                  <SelectionHint>Click to select · Shift-click to add</SelectionHint>
                 </Transport>
               </Selected>
             ) : null}
@@ -1222,20 +1223,10 @@ const Dot = styled.span<{ $on: boolean }>`
   border: 1px solid ${props => (props.$on ? ACCENT : 'var(--pure-chrome-line)')};
 `
 
-const PickToggle = styled.button<{ $on: boolean }>`
-  height: var(--pure-chrome-control-height);
-  padding: 0 10px;
-  border: 1px solid
-    ${props => (props.$on ? ACCENT : 'var(--pure-chrome-line)')};
-  border-radius: 7px;
-  background: ${props => (props.$on ? ACCENT : 'var(--pure-chrome-surface)')};
-  color: ${props => (props.$on ? 'var(--pure-chrome-on-accent)' : 'var(--pure-chrome-soft)')};
-  font-family: var(--platform-typography-font-family-mono);
-  font-size: var(--pure-chrome-label-size);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  white-space: nowrap;
+const SelectionHint = styled.span`
+  color: var(--pure-chrome-soft);
+  font-family: var(--platform-typography-font-family);
+  font-size: 12px;
 `
 
 const AssetsPane = styled.div`

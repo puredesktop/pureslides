@@ -84,3 +84,24 @@ it('keeps the iframe document stable while seeking a slide and step', async () =
   expect(host.querySelector('iframe')).toBe(frame)
   expect(frame.srcdoc).toBe(source)
 })
+it('enables selection for an editing canvas and accepts clear only from its own frame', async () => {
+  const clear = vi.fn()
+  await act(async () => root.render(createElement(SlideFrame, {
+    html, slide:0, step:0, geometry:{width:1280,height:720,deckId:'deck'}, width:620,
+    live:true, picking:true, onClearSelection:clear,
+  })))
+  const frame = host.querySelector('iframe')!
+  const post = vi.spyOn(frame.contentWindow!, 'postMessage')
+  await act(async () => { window.dispatchEvent(new MessageEvent('message', {
+    source:frame.contentWindow, data:{type:'pureslides:ready'},
+  })) })
+  expect(post).toHaveBeenCalledWith({type:'pureslides:picking',on:true}, '*')
+  await act(async () => { window.dispatchEvent(new MessageEvent('message', {
+    source:window, data:{type:'pureslides:clear-selection'},
+  })) })
+  expect(clear).not.toHaveBeenCalled()
+  await act(async () => { window.dispatchEvent(new MessageEvent('message', {
+    source:frame.contentWindow, data:{type:'pureslides:clear-selection'},
+  })) })
+  expect(clear).toHaveBeenCalledOnce()
+})
