@@ -1,3 +1,4 @@
+import { deckLook, lookDeclarations } from './deckLooks'
 import type { MaterialItem } from './material'
 
 const SYSTEM = `You plan and write slide decks as HTML.
@@ -22,10 +23,10 @@ Rules for the markup:
   One exception: a purely decorative layer — a gradient wash, a full-bleed
   image, or a card that sits behind everything — may be absolute. Mark it
   data-bg so it is understood to be the background rather than a collision.
-- FILL THE FRAME. Content spans the full width between the margins, and the
-  column stack fills the height. A narrow column of text in one corner of a
-  1280×720 frame with dead space around it is the second most common failure.
-  Two columns are a grid of equal fractions, never boxes placed by hand.
+- Compose deliberately. Keep generous consistent margins and use negative
+  space to emphasize the main idea. Do not stretch sparse content or add filler
+  to fill the frame. Use flex or grid for columns; vary their proportions when
+  the argument needs it. Alternate dense evidence with quiet statement slides.
 - Put the slide's headline in an <h1> and its second line in a <p>. The board
   reads those two elements to show and edit a slide's copy, so a slide built
   from unlabelled divs cannot be edited without rewriting it.
@@ -43,6 +44,17 @@ Rules for the markup:
   files listed below, placed as <img src="assets/<file name>"> with the name
   copied exactly. A file marked [logo] belongs small on the title and end
   slides; a content image earns a slide when it carries the argument.
+
+Art direction:
+- Establish a strong opening, a visual rhythm, and a distinct closing. Avoid
+  three consecutive slides with the same composition. Match layout to meaning.
+- Use one focal point per slide: an image, a clear claim, a number, or a diagram.
+  Body copy supports it. Do not put every idea into rounded cards.
+- Use a coordinated palette with legible text contrast. Reserve the accent for
+  the key takeaway and navigation. No arbitrary gradients or decorative blobs.
+- Use the supplied --slide-* tokens on the deck root for palette and heading
+  typography, so the author can change the look without rebuilding the layout.
+  Existing reference-led designs take priority over a preset.
 
 The LOOK is given to you below, and it governs every slide — one palette,
 one type scale, one margin, used throughout. Never mix looks across a deck.`
@@ -236,5 +248,5 @@ function inventoryOf(material: MaterialItem[]): string {
 }
 
 export function deckDesignGuide(look='auto'):string {
-  return `Compose the complete deck HTML for commitDrawerRequest, not the example JSON response shape.\n${SYSTEM}\n${LOOKS[look]??LOOKS.auto}\n${REFERENCE_RULE}\nReturn complete deck HTML to commitDrawerRequest, preserving existing content unless replacement was requested.`
+  return `Compose the complete deck HTML for commitDrawerRequest, not the example JSON response shape.\n${SYSTEM}\n${LOOKS[look]??LOOKS.auto}\nPreset ${deckLook(look).label}: set these tokens on the deck root unless a design reference supplies its own: ${lookDeclarations(look)}\n${REFERENCE_RULE}\nReturn complete deck HTML to commitDrawerRequest, preserving existing content unless replacement was requested.`
 }

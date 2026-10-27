@@ -10,6 +10,8 @@
 import { useEffect } from 'react'
 import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
+import { LookPicker } from './LookPicker'
+import { containDialogFocus } from './dialogFocus'
 import { ASSET_ROLES, type MaterialItem } from '../lib/material'
 import type { AssetRole } from '../lib/assetNotes'
 import type { DeckGeometry } from '../types'
@@ -28,12 +30,6 @@ const FRAMES = [
  * are there for when there is nothing to read a look off, or when they would
  * rather decide it themselves.
  */
-const LOOKS = [
-  { id: 'auto', label: 'Auto', note: 'Read off the files you attach' },
-  { id: 'ink', label: 'Ink', note: 'Dark, high contrast' },
-  { id: 'paper', label: 'Paper', note: 'Light, editorial' },
-  { id: 'signal', label: 'Signal', note: 'White with one accent' },
-]
 
 interface NewDeckWizardProps {
   open: boolean
@@ -102,8 +98,8 @@ export function NewDeckWizard({
 
   return (
     <Scrim>
-      <Dialog>
-        <Title>New deck</Title>
+      <Dialog role="dialog" aria-modal="true" aria-labelledby="new-deck-title" onKeyDown={containDialogFocus}>
+        <Title id="new-deck-title">Start a new story</Title>
 
         <Field>
           <Label htmlFor="wizard-brief">What is it for?</Label>
@@ -189,21 +185,8 @@ export function NewDeckWizard({
         </TwoUp>
 
         <Field>
-          <Label>Look</Label>
-          <Looks>
-            {LOOKS.map(option => (
-              <LookButton
-                key={option.id}
-                type="button"
-                title={option.note}
-                $active={look === option.id}
-                onClick={() => onLook(option.id)}
-              >
-                <LookName>{option.label}</LookName>
-                <LookNote>{option.note}</LookNote>
-              </LookButton>
-            ))}
-          </Looks>
+          <Label>Choose a visual direction</Label>
+          <LookPicker value={look} onChange={onLook} disabled={busy} />
           <Hint>
             A file marked <em>design reference</em> always wins — the deck is
             drawn to match it.
@@ -251,10 +234,10 @@ const Dialog = styled.div`
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 24px;
+  gap: 22px;
+  padding: 28px;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 0;
+  border-radius: 8px;
   /* The popover surface, opaque: the chrome surface is glass on a glass desk, and the editor showed through. */
   background: var(--platform-colors-elevated, #fff);
   box-shadow: 0 18px 50px rgb(15 15 18 / 0.3);
@@ -262,7 +245,8 @@ const Dialog = styled.div`
 
 const Title = styled.h2`
   margin: 0;
-  font-size: 19px;
+  font-size: 24px;
+  letter-spacing: -.035em;
 `
 
 const Field = styled.div`
@@ -281,7 +265,7 @@ const Brief = styled.textarea`
   resize: vertical;
   padding: 10px 12px;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 0;
+  border-radius: 8px;
   background: var(--platform-colors-surface);
   color: var(--platform-colors-text);
   font: inherit;
@@ -292,7 +276,7 @@ const Brief = styled.textarea`
 const Input = styled.input`
   padding: 8px 10px;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 0;
+  border-radius: 8px;
   background: var(--platform-colors-surface);
   color: var(--platform-colors-text);
   font: inherit;
@@ -315,7 +299,7 @@ const FormatButton = styled.button<{ $active?: boolean }>`
   border: 1px solid
     ${props =>
       props.$active ? ACCENT : 'var(--platform-colors-border)'};
-  border-radius: 0;
+  border-radius: 8px;
   background: ${props =>
     props.$active ? ACCENT : 'var(--platform-colors-surface)'};
   color: ${props => (props.$active ? 'var(--pure-chrome-on-accent)' : 'var(--platform-colors-text)')};
@@ -344,7 +328,7 @@ const FileThumb = styled.img`
   height: 78px;
   object-fit: contain;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 0;
+  border-radius: 8px;
   background: var(--pure-chrome-well);
 `
 
@@ -354,7 +338,7 @@ const FileKind = styled.span`
   display: grid;
   place-items: center;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 0;
+  border-radius: 8px;
   background: var(--platform-colors-surface);
   font-family: var(--platform-typography-font-family-mono, monospace);
   font-size: 9px;
@@ -370,7 +354,7 @@ const RoleSelect = styled.select<{ $set: boolean }>`
       props.$set
         ? ACCENT
         : 'var(--platform-colors-border)'};
-  border-radius: 0;
+  border-radius: 8px;
   background: var(--platform-colors-surface);
   color: ${props =>
     props.$set
@@ -393,39 +377,6 @@ const Hint = styled.div`
   color: var(--platform-colors-text-secondary);
 `
 
-const Looks = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-`
-
-const LookButton = styled.button<{ $active?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 9px;
-  border: 1px solid
-    ${props =>
-      props.$active ? ACCENT : 'var(--platform-colors-border)'};
-  border-radius: 0;
-  background: var(--platform-colors-surface);
-  color: var(--platform-colors-text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-`
-
-const LookName = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-`
-
-const LookNote = styled.span`
-  font-size: 9.5px;
-  line-height: 1.25;
-  color: var(--platform-colors-text-secondary);
-`
-
 const Actions = styled.div`
   display: flex;
   align-items: center;
@@ -435,7 +386,7 @@ const Actions = styled.div`
 const PrimaryButton = styled.button`
   padding: 10px 18px;
   border: 0;
-  border-radius: 0;
+  border-radius: 8px;
   background: ${ACCENT};
   color: var(--pure-chrome-on-accent);
   font: inherit;
@@ -450,7 +401,7 @@ const PrimaryButton = styled.button`
 const GhostButton = styled.button`
   padding: 8px 14px;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 0;
+  border-radius: 8px;
   background: var(--platform-colors-surface);
   color: var(--platform-colors-text);
   font: inherit;

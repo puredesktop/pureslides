@@ -1,3 +1,4 @@
+import { lookFromHtml, withDeckLook } from './lib/deckLooks'
 import type { DeckAgentToolContext } from './agents/catalog'
 import {
   useVideoDrop,
@@ -1323,7 +1324,7 @@ export function App(): React.ReactElement {
       }
       return {
         ...request,
-        guide: deckDesignGuide(lookRef.current),
+        guide: deckDesignGuide(lookFromHtml(documentRef.current.html) ?? lookRef.current),
         slideCount: slideCountRef.current,
         material: materialRef.current,
       }
@@ -1345,7 +1346,7 @@ export function App(): React.ReactElement {
     drawerRequestRef.current = request
     return {
       ...request,
-      guide: deckDesignGuide(lookRef.current),
+      guide: deckDesignGuide(lookFromHtml(documentRef.current.html) ?? lookRef.current),
       slideCount: slideCountRef.current,
       material: materialRef.current,
     }
@@ -2234,8 +2235,12 @@ export function App(): React.ReactElement {
             }
             look={look}
             onLook={next => {
-              setLook(next)
-              lifecycleRef.current.markDirty()
+              const result = editHtml(html => withDeckLook(html, next), 'Presentation style updated.')
+              if (result.ok) {
+                lookRef.current = next
+                setLook(next)
+                lifecycleRef.current.markDirty()
+              }
             }}
             material={material}
             previews={previews}
@@ -2315,6 +2320,15 @@ export function App(): React.ReactElement {
 
       {hasOpenDeck ? (
         <SlideBoardView
+          look={lookFromHtml(document.html) ?? look}
+          onLook={next => {
+            const result = editHtml(html => withDeckLook(html, next), 'Presentation style updated.')
+            if (result.ok) {
+              lookRef.current = next
+              setLook(next)
+              lifecycleRef.current.markDirty()
+            }
+          }}
           html={document.html}
           slides={slides}
           geometry={geometry}
