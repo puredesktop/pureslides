@@ -39,6 +39,7 @@ export const PURESLIDES_AGENT_TOOLS = [
   'setAssetRole',
   'describeAsset',
   'setBrief',
+  'setLook',
   'draftDeck',
   'getDrawerRequest',
   'cancelDrawerRequest',
@@ -107,6 +108,8 @@ export interface DeckAgentToolContext {
   describeAsset: (name: string, description: string) => void
   setAssetRole: (name: string, role: AssetRole) => void
   setBrief: (patch: { brief?: string; slides?: number }) => void
+  /** Change the deck's look: its palette and type tokens, through the door. */
+  setLook: (look: string, options?: EditOptions) => DeckEditResult
   draftDeck: () => Promise<unknown>
   cancelDrawerRequest: (args: Record<string, unknown>) => Promise<unknown>
   getDrawerRequest: () => Promise<unknown>

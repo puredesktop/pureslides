@@ -86,7 +86,8 @@ the weight, leading, tracking and line length for each level. Seven looks:
 Auto (Inter), Ink (Space Grotesk over IBM Plex Sans, dark), Paper (Newsreader
 Display over Newsreader), Signal (Bricolage Grotesque over Inter), Brief
 (Archivo, dense), Gallery (Instrument Serif over Instrument Sans) and Clear
-(Atkinson Hyperlegible Next, larger). All of it lands on the deck root as
+(Atkinson Hyperlegible Next, larger). `setLook` picks one (`getDeckContext`
+says which is set). All of it lands on the deck root as
 `--slide-*` tokens, and every block reads them, so a block reads right in
 every look.
 
@@ -174,7 +175,8 @@ Not "write eight slides by hand". The author's path is:
 1. `addAsset` each file, `setAssetRole` for references and logos,
    `describeAsset` every image — a description is what a slide gets written
    FROM, and an undescribed file is skipped rather than used badly.
-2. `setBrief` with what the deck is for and roughly how many slides.
+2. `setBrief` with what the deck is for and roughly how many slides, and
+   `setLook` with the look that suits the room (see Type, below).
 3. `draftDeck`.
 
 `draftDeck` now PREPARES a durable request and returns immediately. It never
@@ -277,7 +279,7 @@ carrying the content forward.
 | Retype one element | `getDeckContext` → `setElementText` |
 | Rewrite one element | `getDeckContext` → `setElement` |
 | Add a ready-made layout | `listBlocks` → `addBlock` |
-| Set the type | choose a look; write sizes and faces with `--slide-*` tokens |
+| Set the type | `setLook`; write sizes and faces with `--slide-*` tokens |
 | Put a clip on a slide | `addAsset` → `addBlock` (`video-full` or `video`, with `asset`) |
 | Remove one element | `getDeckContext` → `deleteElement` |
 | Make something arrive on a press | `setElementStep` |

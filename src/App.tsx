@@ -2039,6 +2039,19 @@ export function App(): React.ReactElement {
         lifecycleRef.current.markDirty()
       }
     },
+    setLook: (next, options) => {
+      const result = editHtml(
+        html => withDeckLook(html, next),
+        'Presentation style updated.',
+        agentEdit(options, 'deck'),
+      )
+      if (result.ok) {
+        lookRef.current = next
+        setLook(next)
+        lifecycleRef.current.markDirty()
+      }
+      return result
+    },
     draftDeck: () => prepareDrawerRequest('draft', briefRef.current),
     getDrawerRequest,
     commitDrawerRequest,

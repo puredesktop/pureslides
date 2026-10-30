@@ -20,6 +20,7 @@ import type { DeckEditResult } from '../lib/deckDoor'
 import { slidesFromHtml } from '../lib/slides'
 import type { AssetRole } from '../lib/assetNotes'
 import type { DeckAgentToolContext, EditOptions } from './catalog'
+import { DECK_LOOKS, deckLook } from '../lib/deckLooks'
 
 const ROLES = ['content', 'reference', 'logo']
 const PATH = /^\d+(\.\d+)*$/
@@ -526,6 +527,31 @@ export function setBriefHandler(
       slides: slides ?? context.ui.slideCount,
     }),
   }
+}
+
+/**
+ * A look is a palette and a type voice. The agent picks one by id; the
+ * answer says what it set, so the agent can write slides in its terms.
+ */
+export function setLookHandler(
+  context: DeckAgentToolContext,
+  args: Record<string, unknown>,
+): AgentToolHandlerResult {
+  const id = readAgentToolStringArg(args, 'look')?.trim().toLowerCase() ?? ''
+  if (!DECK_LOOKS.some(look => look.id === id)) {
+    return agentToolErrorContent(
+      `look must be one of ${DECK_LOOKS.map(look => look.id).join(', ')}`,
+    )
+  }
+  const look = deckLook(id)
+  return landed(context.setLook(id, editOptions(args)), {
+    look: look.id,
+    label: look.label,
+    heading: look.type.heading,
+    body: look.type.body,
+    scale: look.scale,
+    note: 'every block and every --slide-* token now follows this look; write new slides with the tokens, not raw sizes or font names',
+  })
 }
 
 /**

@@ -35,6 +35,7 @@ import {
   presentHandler,
   setAssetRoleHandler,
   setBriefHandler,
+  setLookHandler,
   setDeckHandler,
   addBlockHandler,
   listBlocksHandler,
@@ -116,6 +117,8 @@ export function usePureSlidesAgentTools(
       describeAssetHandler(contextRef.current, invoke.arguments ?? {}),
     setBrief: async invoke =>
       setBriefHandler(contextRef.current, invoke.arguments ?? {}),
+    setLook: async invoke =>
+      setLookHandler(contextRef.current, invoke.arguments ?? {}),
     getDrawerRequest: async () => ({
       content: JSON.stringify(await contextRef.current.getDrawerRequest()),
     }),
