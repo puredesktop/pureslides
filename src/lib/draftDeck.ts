@@ -35,10 +35,22 @@ Rules for the markup:
 - Put the slide's headline in an <h1> and its second line in a <p>. The board
   reads those two elements to show and edit a slide's copy, so a slide built
   from unlabelled divs cannot be edited without rewriting it.
-- Type is read from the back of a room. Headlines 54px and up; body, card and
-  column text 24px and up; small labels never under 18px. Nothing on a slide
-  is smaller than 18px — a 14px caption that reads fine on your screen is
-  invisible on a projector.
+- Type is read from the back of a room, and the look already set it. Use the
+  type tokens on the deck root in inline styles instead of raw numbers:
+  font-family var(--slide-heading-font) for headings and var(--slide-body-font)
+  for text; font-size var(--slide-size-display) (title, statement, divider),
+  var(--slide-size-headline) (a slide's <h1>), var(--slide-size-lead) (the line
+  under a title, a point, a card title), var(--slide-size-body) (sentences),
+  var(--slide-size-label) (kickers and small labels, uppercase with
+  letter-spacing var(--slide-tracking-label)), var(--slide-size-stat) (one big
+  number). Pair each size with its leading (var(--slide-leading-display |
+  headline | lead | body)) and tracking (var(--slide-tracking-display |
+  headline | body)); weights are var(--slide-heading-weight),
+  var(--slide-body-weight) and var(--slide-strong-weight). Cap measures with
+  max-width var(--slide-measure-headline | lead | body). Numbers in a column
+  get font-variant-numeric: tabular-nums. Never two fonts beyond the look's
+  heading and body faces, never a size under 18px, never a headline smaller
+  than the text under it, and under 60 words a slide.
 - BUILDS: when a slide has parts that should arrive one at a time, give each
   part data-step="1", "2", … numbered from 1 with no gaps. Anything without
   data-step is on from the start. Use builds for lists and reveals; do not
@@ -57,8 +69,9 @@ Art direction:
   Body copy supports it. Do not put every idea into rounded cards.
 - Use a coordinated palette with legible text contrast. Reserve the accent for
   the key takeaway and navigation. No arbitrary gradients or decorative blobs.
-- Use the supplied --slide-* tokens on the deck root for palette and heading
+- Use the supplied --slide-* tokens on the deck root for palette and all
   typography, so the author can change the look without rebuilding the layout.
+  The app adds the look's fonts itself; never write @font-face.
   Existing reference-led designs take priority over a preset.
 
 The LOOK is given to you below, and it governs every slide — one palette,
@@ -79,11 +92,23 @@ its palette, type, weight and spacing and write every slide in that language.
 Failing that, take the colours from a logo. With nothing to read, choose one
 restrained look and hold it across the deck.`,
   ink: `LOOK — Ink: dark ground (near-black, not pure black), light type, high
-contrast, one accent used sparingly. Generous margins.`,
+contrast, Space Grotesk headlines over IBM Plex Sans, one accent used
+sparingly. Generous margins.`,
   paper: `LOOK — Paper: light editorial. Warm off-white ground, near-black
-type, a serif or high-contrast display face for headlines, plenty of air.`,
-  signal: `LOOK — Signal: white ground, near-black type, one saturated accent
+type, Newsreader Display headlines over Newsreader text, quotes in italic,
+plenty of air.`,
+  signal: `LOOK — Signal: white ground, near-black type, Bricolage Grotesque
+headlines over Inter, a wide scale. Few words, large; one saturated accent
 used for a single element per slide and nothing else.`,
+  brief: `LOOK — Brief: sober and dense. Archivo throughout on a tight scale,
+teal accent. Built for figures, tables and reports: use the key-figures and
+before-and-after compositions, tabular numbers, labels over values.`,
+  gallery: `LOOK — Gallery: stone ground, Instrument Serif headlines (one weight —
+never bold them) over Instrument Sans. Let pictures lead; type sits quietly
+beside them with wide margins.`,
+  clear: `LOOK — Clear: maximum legibility. Atkinson Hyperlegible Next, larger
+body (28px), highest contrast, left-aligned, generous leading. Fewer words per
+slide than any other look.`,
 }
 
 const REFERENCE_RULE = `Every attached file is shown to you as an image, each named and marked with

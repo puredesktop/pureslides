@@ -20,6 +20,7 @@
  * hand would commit megabytes of base64 into index.html.
  */
 import { DECK_ASSETS_DIR } from '../constants'
+import { BUNDLED_FONT_URLS } from '../fonts/urls'
 
 /** Per-asset ceiling for inlining a picture into the preview. */
 export const PREVIEW_ASSET_MAX_BYTES = 12 * 1024 * 1024
@@ -175,7 +176,9 @@ export async function resolvePreviewAssets(
  * The document on disk keeps its clean relative paths.
  */
 export function inlineAssetUrls(html: string, previews: PreviewAssetMap): string {
-  if (!Object.keys(previews).length) return html
+  // The app ships the deck's faces, so every frame can show them without
+  // reading the package: they are in the map before anything is read.
+  previews = { ...BUNDLED_FONT_URLS, ...previews }
   let result = ''
   let cursor = 0
   for (const reference of assetReferences(html)) {
@@ -204,6 +207,7 @@ export interface DeinlineResult {
  * counted, so the status can say so rather than silently keeping base64.
  */
 export function deinlineAssetUrls(html: string, previews: PreviewAssetMap): DeinlineResult {
+  previews = { ...BUNDLED_FONT_URLS, ...previews }
   let next = html
   const restored: string[] = []
   // Longest first, so the replacement is independent of map order.

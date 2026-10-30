@@ -20,6 +20,7 @@ import {
   type RevisionEntry,
 } from '@purescience/platform-ui/editing'
 import { checkDeck } from './checkDeck'
+import { withDeckType } from './deckType'
 
 export type DeckEditOrigin = EditOrigin
 
@@ -101,8 +102,11 @@ export type DeckEditPlan =
  * document with no deck root is refused as invalid.
  */
 export function planDeckEdit(request: DeckEditRequest, current: DeckDoorState): DeckEditPlan {
-  const next = request.transform(current.html)
-  const rebase = request.rebase === false ? undefined : ({ current: latest }: { current: string }) => request.transform(latest)
+  // The type stylesheet is derived from the tokens on every edit, so no
+  // rewrite can leave a deck without its faces.
+  const transform = (html: string) => withDeckType(request.transform(html))
+  const next = transform(current.html)
+  const rebase = request.rebase === false ? undefined : ({ current: latest }: { current: string }) => transform(latest)
   const outcome = applyEdit(
     {
       next,

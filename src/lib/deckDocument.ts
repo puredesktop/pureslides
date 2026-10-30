@@ -1,4 +1,5 @@
 import { lookDeclarations } from './deckLooks'
+import { withDeckType } from './deckType'
 /**
  * The deck document, and its package.
  *
@@ -99,9 +100,9 @@ function escapeHtmlText(text: string): string {
 /** A starter slide, marked so drafting knows nobody wrote it. */
 export function createStarterSlideHtml(title = DEFAULT_DECK_TITLE): string {
   return `<div data-slide data-block="starter" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 28px; padding: 80px 100px; background: var(--slide-bg, #f8f9fc); color: var(--slide-ink, #192338)">
-      <div style="font: 600 20px system-ui, sans-serif; letter-spacing: .18em; text-transform: uppercase; color: var(--slide-accent, #3459d4)">A new perspective</div>
-      <h1 style="margin: 0; max-width: 16ch; font-size: 76px; line-height: 1.06; font-family: var(--slide-heading-font, system-ui, sans-serif); font-weight: var(--slide-heading-weight, 700); letter-spacing: -0.04em">${escapeHtmlText(title)}</h1>
-      <p style="margin: 0; font: 26px/1.5 system-ui, sans-serif; color: var(--slide-muted, #53617a)">Your next great story starts here.</p>
+      <div style="font-family: var(--slide-body-font, system-ui, sans-serif); font-size: var(--slide-size-label, 18px); font-weight: var(--slide-label-weight, 600); line-height: 1.2; letter-spacing: var(--slide-tracking-label, 0.12em); text-transform: uppercase; color: var(--slide-accent, #3459d4)">A new perspective</div>
+      <h1 style="margin: 0; max-width: var(--slide-measure-display, 16ch); font-family: var(--slide-heading-font, system-ui, sans-serif); font-size: var(--slide-size-display, 76px); font-weight: var(--slide-heading-weight, 700); line-height: var(--slide-leading-display, 1.04); letter-spacing: var(--slide-tracking-display, -0.035em); text-wrap: balance">${escapeHtmlText(title)}</h1>
+      <p style="margin: 0; max-width: var(--slide-measure-lead, 36ch); font-family: var(--slide-body-font, system-ui, sans-serif); font-size: var(--slide-size-lead, 32px); line-height: var(--slide-leading-lead, 1.32); color: var(--slide-muted, #53617a); text-wrap: pretty">Your next great story starts here.</p>
     </div>`
 }
 
@@ -110,14 +111,13 @@ export function createDefaultDeckDocument(
 ): DeckDocument {
   return {
     title,
-    html: `<!DOCTYPE html>
+    html: withDeckType(`<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <title>${escapeHtmlText(title)}</title>
     <style>
       html, body { margin: 0; padding: 0; background: #0e0e11; }
-      #deck { font-family: Archivo, system-ui, -apple-system, sans-serif; }
       [data-slide] { box-sizing: border-box; }
 ${BUILD_CSS}
     </style>
@@ -128,7 +128,7 @@ ${BUILD_CSS}
     </div>
   </body>
 </html>
-`,
+`),
   }
 }
 

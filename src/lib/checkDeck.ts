@@ -6,7 +6,14 @@
  * will not be there in the room; a script calls document.write and erases
  * the deck. Errors block presenting and exporting; warnings are worth
  * knowing and no more.
+ *
+ * The typography a room notices — text too small to read from the back,
+ * lines too long to follow, three typefaces, a headline ending on one word,
+ * a slide of paragraphs, weak contrast, a headline smaller than its text —
+ * is checked in `typeCheck`, as warnings.
  */
+import { typographyFindings } from './typeCheck'
+
 export type CheckSeverity = 'error' | 'warning'
 
 export interface CheckFinding {
@@ -126,6 +133,8 @@ export function checkDeck(html: string): CheckFinding[] {
       }
     }
   })
+
+  findings.push(...typographyFindings(doc, root, slides))
 
   const head = doc.head?.innerHTML ?? ''
   if (/<link[^>]+href=["']https?:/i.test(head)) {

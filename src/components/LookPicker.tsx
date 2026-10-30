@@ -1,6 +1,7 @@
 import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
 import { DECK_LOOKS } from '../lib/deckLooks'
+import { installAppFonts } from '../fonts/packageFonts'
 
 /** The same palettes are used for these previews, starter slides and AI guidance. */
 export function LookPicker({
@@ -12,6 +13,8 @@ export function LookPicker({
   onChange: (value: string) => void
   disabled?: boolean
 }) {
+  // The samples are set in the faces the decks get.
+  installAppFonts()
   return (
     <Choices role="group" aria-label="Presentation style">
       {DECK_LOOKS.map(look => (
@@ -29,6 +32,8 @@ export function LookPicker({
             <span
               style={{
                 color: look.accent,
+                fontFamily: look.bodyFont,
+                fontWeight: Number(look.type.labelWeight),
                 fontSize: 6,
                 letterSpacing: '.14em',
                 textTransform: 'uppercase',
@@ -37,7 +42,12 @@ export function LookPicker({
               A new perspective
             </span>
             <strong
-              style={{ fontFamily: look.font, fontWeight: Number(look.weight) }}
+              style={{
+                fontFamily: look.font,
+                fontWeight: Number(look.weight),
+                letterSpacing: look.type.tracking.display,
+                lineHeight: look.type.leading.display,
+              }}
             >
               Ideas that
               <br />
@@ -106,8 +116,6 @@ const Sample = styled.span`
   gap: 4px;
   strong {
     font-size: clamp(13px, 17cqw, 28px);
-    line-height: 1.06;
-    letter-spacing: -0.04em;
   }
 `
 const Swatches = styled.span`
