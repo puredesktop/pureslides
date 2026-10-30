@@ -5,6 +5,13 @@
  * state as it is now rather than as it was when the drawer opened.
  */
 import { useRef } from 'react'
+import {
+  listLookFontsHandler,
+  makeMotifHandler,
+  saveLookAsBrandHandler,
+  setCustomLookHandler,
+  viewSlideHandler,
+} from '../agents/lookTools'
 import type { AgentToolHandler } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import { usePlatformAgentTools } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import {
@@ -49,6 +56,8 @@ import {
 } from '../agents/handlers'
 
 const READ_ONLY_TOOLS = new Set([
+  'listLookFonts',
+  'viewSlide',
   'getDeckContext',
   'getSlide',
   'listSlides',
@@ -119,6 +128,15 @@ export function usePureSlidesAgentTools(
       setBriefHandler(contextRef.current, invoke.arguments ?? {}),
     setLook: async invoke =>
       setLookHandler(contextRef.current, invoke.arguments ?? {}),
+    listLookFonts: async () => listLookFontsHandler(),
+    setCustomLook: async invoke =>
+      setCustomLookHandler(contextRef.current, invoke.arguments ?? {}),
+    makeMotif: async invoke =>
+      makeMotifHandler(contextRef.current, invoke.arguments ?? {}),
+    saveLookAsBrand: async invoke =>
+      saveLookAsBrandHandler(contextRef.current, invoke.arguments ?? {}),
+    viewSlide: async invoke =>
+      viewSlideHandler(contextRef.current, invoke.arguments ?? {}),
     getDrawerRequest: async () => ({
       content: JSON.stringify(await contextRef.current.getDrawerRequest()),
     }),

@@ -87,7 +87,9 @@ Auto (Inter), Ink (Space Grotesk over IBM Plex Sans, dark), Paper (Newsreader
 Display over Newsreader), Signal (Bricolage Grotesque over Inter), Brief
 (Archivo, dense), Gallery (Instrument Serif over Instrument Sans) and Clear
 (Atkinson Hyperlegible Next, larger). `setLook` picks one (`getDeckContext`
-says which is set). All of it lands on the deck root as
+says which is set) — for a deck with no brand to match. An organisation's
+own look is `setCustomLook` (next section): any palette roles, any bundled
+or brand face, a motif. All of it lands on the deck root as
 `--slide-*` tokens, and every block reads them, so a block reads right in
 every look.
 
@@ -115,6 +117,58 @@ than the text under it; a figure may be larger). Fix them like layout
 findings. For how to choose a look, pair, scale, align, colour and space a
 deck, and for the final visual review, read the **Slide typography and
 design** skill.
+
+## An organisation's own look — from a reference or a brand
+
+When the person gives a reference image (their website, a brochure, a
+screenshot) or a brand (`.designsystem.json`), or asks for "our look and
+feel", the deck is made in THAT look. The stock looks are never a substitute:
+`setLook` refuses while a reference is attached. The method is the suite's
+shared **Matching a house style** skill (read it with `read_skill`); here it
+is with this app's tools:
+
+1. **Look at the reference first.** `view_image` with its absolute path shows
+   you the pixels. A filename is not evidence: never describe or match an
+   image you have not seen. `addAsset` it and `setAssetRole` it `reference`
+   so it stays with the deck and `viewSlide` can compare against it.
+2. **Read it by role**: ground, text, muted text, the accent (the primary
+   button), a second accent (a headline's second-colour line), a highlight (a
+   small bright tag or node colour), surfaces and hairlines — as hex values
+   picked from the pixels, not guessed.
+3. **Read the type**: classify the headline face (geometric or grotesque sans,
+   serif, mono; width; x-height; the a, g and t), its weight and tracking,
+   whether tags are set in a monospace. `listLookFonts` lists the bundled open
+   faces with what each is like; pick the closest. A brand's own woff2 files
+   (from its `.designsystem.json`) travel in the deck instead.
+4. **Set it**: `setCustomLook` with `brand`, or with `colors`, `fonts`,
+   `scale`, `radius` read off the reference. Its notes report contrast
+   failures and faces that would not travel; fix them.
+5. **Generate the motif; do not draw it.** A recurring graphic idea in the
+   reference — a network of glowing nodes, a grain, a light field, a texture,
+   hero or conceptual art — is made with the image model: `makeMotif`, with a
+   prompt describing it from the reference, and `reference` set so the model
+   matches it. It asks for the brand palette, a wide background-safe
+   composition with quiet areas for type and no text, saves the picture in
+   `assets/motifs/` and sets it behind every slide. Judge the returned picture
+   against the reference; regenerate if it is off. Use ONE motif across the
+   deck. SVG or CSS line art is only the fallback when `makeMotif` reports no
+   image model (say so), or for exact diagrams and charts.
+6. **Write the slides in it**: `--slide-accent-2` for the second line of a
+   headline (`<span style="display: block; color: var(--slide-accent-2)">`),
+   `--slide-label-font` with `--slide-highlight` for tracked tags like
+   `// RESEARCH & PUBLISHING`, `--slide-radius` on cards and the button shape,
+   `--slide-accent` for the one primary action. Keep slide grounds
+   `var(--slide-bg)` so the motif shows; `data-motif="none"` on a slide that
+   must stand clear (a dense table), `data-motif="right"` or `"faint"` where
+   text needs more room.
+7. **Compare before you finish.** `viewSlide` draws a slide and puts the
+   reference beside it. Name every difference a person who knows the brand
+   would see — ground, face, weight, second colour, labels, motif, shapes,
+   space — fix it, and look again. Do this for the title slide and at least
+   one content slide.
+8. **Keep it.** `saveLookAsBrand` writes the look as a brand (the shared
+   format, with fonts, logos, the motif art and the references beside it), so
+   Canvas, PureSite and PureDesign make the next piece in the same look.
 
 ## Video on a slide
 
@@ -173,10 +227,11 @@ change so the author sees it first.
 Not "write eight slides by hand". The author's path is:
 
 1. `addAsset` each file, `setAssetRole` for references and logos,
-   `describeAsset` every image — a description is what a slide gets written
+   look at each with `view_image`, `describeAsset` every image — a description is what a slide gets written
    FROM, and an undescribed file is skipped rather than used badly.
 2. `setBrief` with what the deck is for and roughly how many slides, and
-   `setLook` with the look that suits the room (see Type, below).
+   the look: `setCustomLook` (and `makeMotif`) when there is a reference or a
+   brand, otherwise `setLook` with the stock look that suits the room.
 3. `draftDeck`.
 
 `draftDeck` now PREPARES a durable request and returns immediately. It never
@@ -280,6 +335,10 @@ carrying the content forward.
 | Rewrite one element | `getDeckContext` → `setElement` |
 | Add a ready-made layout | `listBlocks` → `addBlock` |
 | Set the type | `setLook`; write sizes and faces with `--slide-*` tokens |
+| Match an organisation's look | `view_image` → `setCustomLook` (`brand` or tokens) → `makeMotif` → `viewSlide` |
+| See the bundled faces | `listLookFonts` |
+| Look at a slide beside the reference | `viewSlide` |
+| Keep the look for other apps | `saveLookAsBrand` |
 | Put a clip on a slide | `addAsset` → `addBlock` (`video-full` or `video`, with `asset`) |
 | Remove one element | `getDeckContext` → `deleteElement` |
 | Make something arrive on a press | `setElementStep` |

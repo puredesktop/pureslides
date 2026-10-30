@@ -1,4 +1,6 @@
 import { lookFromHtml, withDeckLook } from './lib/deckLooks'
+import { withCustomLook } from './lib/customLook'
+import { vision } from '@purescience/platform-ui/bridge/assistants'
 import { writeDeckFonts } from './fonts/packageFonts'
 import type { DeckAgentToolContext } from './agents/catalog'
 import {
@@ -143,6 +145,7 @@ import {
   ExportCancelled,
   assertDeckExportable,
   exportDeck,
+  renderSlidePicture,
 } from './lib/exportDeck'
 import { base64FromBytes } from './lib/encodeMp4'
 import type { ExportKind, ExportProgressState } from './lib/exportDeck'
@@ -171,6 +174,19 @@ const IDLE_PROGRESS: ExportProgressState = {
   unit: 0,
   unitCount: 0,
   message: '',
+}
+
+/** Make a folder and its missing parents, one createFolder at a time. */
+async function ensureFolderPath(path: string): Promise<void> {
+  const parts = path.replace(/\/+$/, '').split('/')
+  for (let i = 2; i <= parts.length; i += 1) {
+    const parent = parts.slice(0, i - 1).join('/') || '/'
+    try {
+      await createFolder(parent, parts[i - 1])
+    } catch {
+      /* already there */
+    }
+  }
 }
 
 function fileNameFromPath(path: string): string {
@@ -1325,7 +1341,7 @@ export function App(): React.ReactElement {
       }
       return {
         ...request,
-        guide: deckDesignGuide(lookFromHtml(documentRef.current.html) ?? lookRef.current),
+        guide: deckDesignGuide(lookFromHtml(documentRef.current.html) ?? lookRef.current, documentRef.current.html),
         slideCount: slideCountRef.current,
         material: materialRef.current,
       }
@@ -1347,7 +1363,7 @@ export function App(): React.ReactElement {
     drawerRequestRef.current = request
     return {
       ...request,
-      guide: deckDesignGuide(lookFromHtml(documentRef.current.html) ?? lookRef.current),
+      guide: deckDesignGuide(lookFromHtml(documentRef.current.html) ?? lookRef.current, documentRef.current.html),
       slideCount: slideCountRef.current,
       material: materialRef.current,
     }
@@ -2051,6 +2067,50 @@ export function App(): React.ReactElement {
         lifecycleRef.current.markDirty()
       }
       return result
+    },
+    setCustomLook: (spec, options) => {
+      const result = editHtml(
+        html => withCustomLook(html, spec),
+        'Presentation style updated.',
+        agentEdit(options, 'deck'),
+      )
+      if (result.ok) {
+        lookRef.current = 'custom'
+        setLook('custom')
+        lifecycleRef.current.markDirty()
+      }
+      return result
+    },
+    files: {
+      readText: readTextFile,
+      readBase64: (path, maxBytes) => readBinaryBase64(path, maxBytes),
+      writeText: (path, text) => writeTextFile(path, text),
+      writeBase64: writeBinaryFile,
+      ensureFolder: ensureFolderPath,
+    },
+    writePackageFile: async (relative, base64) => {
+      const path = boundPathRef.current
+      if (!path) throw new Error('there is no deck open')
+      const clean = relative.replace(/^\.\//, '')
+      if (!/^assets\/(?:[\w. -]+\/)*[\w. -]+$/.test(clean) || clean.split('/').includes('..'))
+        throw new Error(`${relative} is not a path inside the deck's assets`)
+      await ensureFolderPath(`${path}/${clean.replace(/\/[^/]*$/, '')}`)
+      if (path !== boundPathRef.current) throw Error('The deck changed while the file was being written. Try again.')
+      await writeBinaryFile(`${path}/${clean}`, base64)
+      return clean
+    },
+    generateImage: bridge.getMethods().includes(PLATFORM_BRIDGE_METHODS.ASSISTANTS_VISION_GENERATE)
+      ? async request => {
+          const made = await vision.generate(request)
+          return { base64: made.base64, mimeType: made.mimeType, modelId: made.modelId }
+        }
+      : null,
+    renderSlide: async index => {
+      const path = await saveDeck()
+      const html = documentRef.current.html
+      await writeDeckFonts(path, html, { createFolder, writeBinaryFile, listFiles })
+      const slide = slidesFromHtml(html)[index]
+      return renderSlidePicture(path, html, index, slide?.steps ?? 0)
     },
     draftDeck: () => prepareDrawerRequest('draft', briefRef.current),
     getDrawerRequest,

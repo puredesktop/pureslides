@@ -74,7 +74,8 @@ describe('planDeckEdit', () => {
     const latest = { html: moved, hash: hashDeck(moved) }
     const plan = planDeckEdit(
       {
-        transform: html => setElementText(html, 0, '0', 'Retyped'),
+        // The starter's headline is its second element, under the label.
+        transform: html => setElementText(html, 0, '1', 'Retyped'),
         origin: 'manual',
         baseHash: current.hash,
       },

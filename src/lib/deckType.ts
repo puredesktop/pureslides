@@ -20,6 +20,7 @@
 import { BUNDLED_FAMILIES, FONT_DIR, bundledFamily, type BundledFamily } from '../fonts/registry'
 import { DECK_ASSETS_DIR } from '../constants'
 import { parseStyle, resolveVars } from './inlineStyle'
+import { deckFaces, type BrandFace } from './customLook'
 
 const MANAGED = /<style\s+data-deck-type(?:\s[^>]*)?>[\s\S]*?<\/style>\s*/i
 
@@ -41,6 +42,7 @@ const BASE_RULES = `:where([data-deck-id]) {
 :where([data-deck-id]) :where(h1, h2, h3) {
   font-family: var(--slide-heading-font, inherit);
   font-weight: var(--slide-heading-weight, 700);
+  text-transform: var(--slide-heading-case, none);
   text-wrap: balance;
 }
 :where([data-deck-id]) :where(p, li, blockquote, figcaption, dd) {
@@ -74,6 +76,51 @@ function fontFaceRules(families: BundledFamily[], italic: boolean): string {
     .join('\n')
 }
 
+/**
+ * A custom look's motif: the art behind every slide (or the slides that ask
+ * for it with `data-motif`), on its own layer above the slide's ground and
+ * below its words, so no block has to know it is there. Written only when
+ * the root carries `--slide-motif`.
+ */
+const MOTIF_RULES = `:where([data-deck-id]) > :where([data-slide]) { isolation: isolate; }
+:where([data-deck-id][data-motif-on="all"]) > :where([data-slide]:not([data-motif="none"]))::before,
+:where([data-deck-id]) > :where([data-slide][data-motif]:not([data-motif="none"]))::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: var(--slide-motif, none);
+  background-size: cover;
+  background-position: center;
+  opacity: var(--slide-motif-opacity, 1);
+}
+:where([data-deck-id][data-motif-placement="right"]) > :where([data-slide]:not([data-motif]))::before,
+:where([data-deck-id]) > :where([data-slide][data-motif="right"])::before {
+  left: 38%;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 40%);
+  mask-image: linear-gradient(to right, transparent, #000 40%);
+}
+:where([data-deck-id][data-motif-placement="left"]) > :where([data-slide]:not([data-motif]))::before,
+:where([data-deck-id]) > :where([data-slide][data-motif="left"])::before {
+  right: 38%;
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 40%);
+  mask-image: linear-gradient(to left, transparent, #000 40%);
+}
+:where([data-deck-id][data-motif-placement="faint"]) > :where([data-slide]:not([data-motif]))::before,
+:where([data-deck-id]) > :where([data-slide][data-motif="faint"])::before {
+  opacity: calc(var(--slide-motif-opacity, 1) * 0.35);
+}`
+
+function brandFaceRules(faces: BrandFace[]): string {
+  return faces
+    .map(
+      face =>
+        `@font-face { font-family: '${face.family}'; src: url("${face.file}") format("woff2"); font-weight: ${face.weight}; font-style: ${face.style}; font-display: block; }`,
+    )
+    .join('\n')
+}
+
 /** What the deck's type stylesheet should say, or null when the deck has no type tokens. */
 export function deckTypeCss(html: string): string | null {
   if (typeof DOMParser === 'undefined') return null
@@ -82,6 +129,8 @@ export function deckTypeCss(html: string): string | null {
   if (!root) return null
   const tokens = parseStyle(root.getAttribute('style'))
   if (!tokens.has('--slide-body-font')) return null
+  const faces = deckFaces(root)
+  const motif = tokens.has('--slide-motif')
 
   // Read what the deck uses with the tokens' own declarations taken out:
   // a look declares a mono face and an italic quote on every deck, and
@@ -103,6 +152,7 @@ export function deckTypeCss(html: string): string | null {
   add(token('--slide-body-font'))
   if (/var\(--slide-heading-font|<h[1-3][\s>]/i.test(used)) add(token('--slide-heading-font'))
   if (/var\(--slide-mono-font|<(code|pre|kbd|samp)[\s>]/i.test(used)) add(token('--slide-mono-font'))
+  if (/var\(--slide-label-font|var\(--slide-size-label/i.test(used)) add(token('--slide-label-font'))
   for (const family of BUNDLED_FAMILIES) {
     const named = new RegExp(`(["']|&quot;|font-family:\\s*)${family.family.replace(/ /g, '\\s+')}\\b`, 'i')
     if (named.test(used)) wanted.add(family.family)
@@ -112,8 +162,15 @@ export function deckTypeCss(html: string): string | null {
     (tokens.get('--slide-quote-style') === 'italic' && used.includes('var(--slide-quote-style'))
 
   const families = BUNDLED_FAMILIES.filter(family => wanted.has(family.family))
-  const faces = fontFaceRules(families, italic)
-  return `${faces ? `${faces}\n` : ''}${BASE_RULES}`
+  // The brand's own faces win over a bundled face of the same name: they are the brand.
+  const own = new Set(faces.map(face => face.family.toLowerCase()))
+  const rules = [
+    brandFaceRules(faces),
+    fontFaceRules(families.filter(family => !own.has(family.family.toLowerCase())), italic),
+  ]
+    .filter(Boolean)
+    .join('\n')
+  return `${rules ? `${rules}\n` : ''}${BASE_RULES}${motif ? `\n${MOTIF_RULES}` : ''}`
 }
 
 /**

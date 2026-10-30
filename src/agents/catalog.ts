@@ -14,6 +14,31 @@ import type { MaterialItem } from '../lib/material'
 import type { Slide, SlideEdit } from '../lib/slides'
 import type { AssetRole } from '../lib/assetNotes'
 import type { ExportKind } from '../lib/exportDeck'
+import type { CustomLookSpec } from '../lib/customLook'
+
+/** Files outside the deck: a brand file and its folder. Absolute paths. */
+export interface DeckFileAccess {
+  readText: (path: string) => Promise<string>
+  readBase64: (path: string, maxBytes?: number) => Promise<{ base64: string; mimeType?: string }>
+  writeText: (path: string, text: string) => Promise<void>
+  writeBase64: (path: string, base64: string) => Promise<void>
+  /** Make the folder and any missing parents. */
+  ensureFolder: (path: string) => Promise<void>
+}
+
+export interface GeneratedImage {
+  base64: string
+  mimeType: string
+  modelId: string
+}
+
+export interface ImageRequest {
+  prompt: string
+  sourceImages?: { base64: string; mimeType: string; name?: string }[]
+  size?: 'auto' | '1024x1024' | '1536x1024' | '1024x1536'
+  quality?: 'auto' | 'low' | 'medium' | 'high'
+  outputFormat?: 'png' | 'jpeg' | 'webp'
+}
 
 export const PURESLIDES_AGENT_TOOLS = [
   'getDeckContext',
@@ -40,6 +65,11 @@ export const PURESLIDES_AGENT_TOOLS = [
   'describeAsset',
   'setBrief',
   'setLook',
+  'listLookFonts',
+  'setCustomLook',
+  'makeMotif',
+  'saveLookAsBrand',
+  'viewSlide',
   'draftDeck',
   'getDrawerRequest',
   'cancelDrawerRequest',
@@ -110,6 +140,15 @@ export interface DeckAgentToolContext {
   setBrief: (patch: { brief?: string; slides?: number }) => void
   /** Change the deck's look: its palette and type tokens, through the door. */
   setLook: (look: string, options?: EditOptions) => DeckEditResult
+  /** Put a custom look (an organisation's own) on the deck, through the same door. */
+  setCustomLook: (spec: CustomLookSpec, options?: EditOptions) => DeckEditResult
+  files: DeckFileAccess
+  /** Write bytes into the open deck's package at `assets/…` (folders made as needed); returns the package path. */
+  writePackageFile: (relative: string, base64: string) => Promise<string>
+  /** The desktop's image model, or null when this desktop has none. */
+  generateImage: ((request: ImageRequest) => Promise<GeneratedImage>) | null
+  /** One slide drawn as the renderers draw it, at its last step: a PNG data URL. */
+  renderSlide: (index: number) => Promise<{ dataUrl: string; width: number; height: number }>
   draftDeck: () => Promise<unknown>
   cancelDrawerRequest: (args: Record<string, unknown>) => Promise<unknown>
   getDrawerRequest: () => Promise<unknown>

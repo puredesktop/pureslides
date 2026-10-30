@@ -12,7 +12,10 @@
     "url": "http://localhost:5440"
   },
   "app": {
-    "acceptedDragKinds": ["video", "image"],
+    "acceptedDragKinds": [
+      "video",
+      "image"
+    ],
     "id": "plugin.slides",
     "slug": "slides",
     "name": "PureSlides",
@@ -44,10 +47,77 @@
     ],
     "agents": {
       "tools": [
-        {"name": "cancelDrawerRequest", "risk": "destructive", "description": "Cancel the saved pending request by ID. Subsequent commits are refused. Does not undo a completed save.", "inputSchema": {"type": "object", "properties": {"requestId": {"type": "string"}}, "required": ["requestId"]}},
-        {"name": "getDrawerRequest", "risk": "read", "description": "Read the saved request, exact HTML/baseHash, edit scope, assets and design guide.", "requiresApproval": false, "inputSchema": {"type": "object", "properties": {}, "required": []}},
-        {"name": "commitDrawerRequest", "description": "Commit the saved request once. Draft/edit: supply complete html preserving everything outside the saved selection. Describe: supply descriptions only from actual image pixels. Returns persisted status, not layout certification.", "requiresApproval": true, "inputSchema": {"type": "object", "properties": {"requestId": {"type": "string"}, "baseHash": {"type": "string"}, "html": {"type": "string"}, "title": {"type": "string"}, "descriptions": {"type": "array", "items": {"type": "object", "properties": {"name": {"type": "string"}, "description": {"type": "string"}}, "required": ["name", "description"]}}}, "required": ["requestId", "baseHash"]}},
-
+        {
+          "name": "cancelDrawerRequest",
+          "risk": "destructive",
+          "description": "Cancel the saved pending request by ID. Subsequent commits are refused. Does not undo a completed save.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "requestId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "requestId"
+            ]
+          }
+        },
+        {
+          "name": "getDrawerRequest",
+          "risk": "read",
+          "description": "Read the saved request, exact HTML/baseHash, edit scope, assets and design guide.",
+          "requiresApproval": false,
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        },
+        {
+          "name": "commitDrawerRequest",
+          "description": "Commit the saved request once. Draft/edit: supply complete html preserving everything outside the saved selection. Describe: supply descriptions only from actual image pixels. Returns persisted status, not layout certification.",
+          "requiresApproval": true,
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "requestId": {
+                "type": "string"
+              },
+              "baseHash": {
+                "type": "string"
+              },
+              "html": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "descriptions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "description"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "requestId",
+              "baseHash"
+            ]
+          }
+        },
         {
           "name": "getDeckContext",
           "risk": "read",
@@ -539,20 +609,343 @@
         },
         {
           "name": "setLook",
-          "description": "Choose the deck's look: a palette AND a type voice (heading and body faces that ship with the app, a modular scale, leading, tracking and line lengths), set as --slide-* tokens that every block and slide reads. auto: Inter, neutral, or read from an attached reference. ink: Space Grotesk over IBM Plex Sans, dark; product and engineering. paper: Newsreader Display over Newsreader, warm editorial; essays and research. signal: Bricolage Grotesque over Inter, bold; launches and pitches. brief: Archivo, dense; reports and figures. gallery: Instrument Serif over Instrument Sans; design and portfolios. clear: Atkinson Hyperlegible Next, larger and highest contrast; teaching and big rooms. Set it before drafting; changing it later restyles every slide that uses the tokens.",
+          "description": "Choose one of the seven STOCK looks: a palette AND a type voice (bundled faces, a modular scale, leading, tracking, line lengths), set as --slide-* tokens. auto: Inter, neutral. ink: Space Grotesk over IBM Plex Sans, dark. paper: Newsreader Display over Newsreader, editorial. signal: Bricolage Grotesque over Inter, bold. brief: Archivo, dense. gallery: Instrument Serif over Instrument Sans. clear: Atkinson Hyperlegible Next, largest. NOT for a deck in an organisation's established look: when the person gives a reference image or a brand, or the deck has a reference asset, build a custom look with setCustomLook instead (this tool refuses while a reference is attached unless ignoreReference is true).",
           "inputSchema": {
             "type": "object",
             "properties": {
               "look": {
                 "type": "string",
-                "enum": ["auto", "ink", "paper", "signal", "brief", "gallery", "clear"]
+                "enum": [
+                  "auto",
+                  "ink",
+                  "paper",
+                  "signal",
+                  "brief",
+                  "gallery",
+                  "clear"
+                ]
+              },
+              "baseHash": {
+                "type": "string",
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+              },
+              "ignoreReference": {
+                "type": "boolean",
+                "description": "Only when the person explicitly asked for this stock look despite an attached design reference."
+              }
+            },
+            "required": [
+              "look"
+            ]
+          },
+          "requiresApproval": true
+        },
+        {
+          "name": "listLookFonts",
+          "description": "The open (OFL) faces bundled with the app, each described (geometric, grotesque, serif, mono; width; character), for matching a brand's type to the closest face. Read-only.",
+          "risk": "read",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
+          },
+          "requiresApproval": false
+        },
+        {
+          "name": "setCustomLook",
+          "description": "Make the deck in an organisation's OWN look — the only right tool when the person gives a reference image or a brand, or asks for 'our look and feel'. Look at the reference first (view_image with its path). Then give either brand (a .designsystem.json; its fonts, logos and motif files are brought into the deck) or explicit tokens read from the reference, or both (explicit wins): colors by role (bg ground, ink text, muted, accent, accent2 e.g. a second-colour headline line, highlight e.g. a small bright tag colour, surface, line, inverse/onInverse for a filled panel), fonts (heading, body, mono, label: 'mono' when the brand sets tags in a monospace, headingWeight e.g. 800 for a heavy display, headingCase), scale (base, ratio), radius (px, cards and buttons) and motif (an asset, usually one made with makeMotif: on all slides or marked ones, placement cover|right|left|faint, opacity). Faces must be bundled (listLookFonts) or the brand's own woff2; anything else is replaced by the closest bundled face and said so. A second call adjusts the current custom look. Returns contrast warnings and what to do next: compare with viewSlide.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "brand": {
+                "type": "string",
+                "description": "Absolute path of a .designsystem.json brand file."
+              },
+              "name": {
+                "type": "string",
+                "description": "The look's name, usually the organisation's."
+              },
+              "colors": {
+                "type": "object",
+                "properties": {
+                  "bg": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  },
+                  "ink": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  },
+                  "muted": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  },
+                  "accent": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  },
+                  "accent2": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  },
+                  "highlight": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  },
+                  "surface": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  },
+                  "line": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  },
+                  "inverse": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  },
+                  "onInverse": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  },
+                  "inverseMuted": {
+                    "type": "string",
+                    "pattern": "^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$"
+                  }
+                }
+              },
+              "fonts": {
+                "type": "object",
+                "properties": {
+                  "heading": {
+                    "type": "string"
+                  },
+                  "body": {
+                    "type": "string"
+                  },
+                  "mono": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string",
+                    "enum": [
+                      "body",
+                      "mono"
+                    ]
+                  },
+                  "headingWeight": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 1000
+                  },
+                  "bodyWeight": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 1000
+                  },
+                  "labelWeight": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 1000
+                  },
+                  "headingCase": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "upper"
+                    ]
+                  },
+                  "trackingDisplay": {
+                    "type": "string",
+                    "description": "Display tracking in em, e.g. -0.035em"
+                  }
+                }
+              },
+              "scale": {
+                "type": "object",
+                "properties": {
+                  "base": {
+                    "type": "number",
+                    "minimum": 18,
+                    "maximum": 40
+                  },
+                  "ratio": {
+                    "type": "number",
+                    "minimum": 1.1,
+                    "maximum": 1.7
+                  }
+                }
+              },
+              "radius": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 64
+              },
+              "motif": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "null removes the motif.",
+                "properties": {
+                  "asset": {
+                    "type": "string",
+                    "description": "A file in the deck's assets, e.g. motifs/node-network.png (makeMotif returns it)."
+                  },
+                  "on": {
+                    "type": "string",
+                    "enum": [
+                      "all",
+                      "marked"
+                    ]
+                  },
+                  "placement": {
+                    "type": "string",
+                    "enum": [
+                      "cover",
+                      "right",
+                      "left",
+                      "faint"
+                    ]
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1
+                  }
+                }
               },
               "baseHash": {
                 "type": "string",
                 "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
               }
             },
-            "required": ["look"]
+            "required": []
+          },
+          "requiresApproval": true
+        },
+        {
+          "name": "makeMotif",
+          "description": "Generate the brand's motif, texture or background art with the desktop's image model (best quality) — the default for any recurring graphic idea in a reference (a network of glowing nodes, a grain, a gradient field, a photographic texture). Never imitate such art with CSS shapes or SVG line art; SVG is only a fallback when this tool reports no image model, or for exact diagrams and charts. Prompt from the reference: what the motif is, its light, density and colours; pass reference (the reference asset or absolute path) so the model matches it. The tool adds the brand palette and asks for a wide, background-safe composition with quiet areas for type and no text. Saved to assets/motifs/<name>.png and, by default, set as the custom look's motif behind every slide. The picture comes back to you: judge it against the reference and regenerate if it is off. Reuse ONE motif across the deck; saveLookAsBrand keeps it for other apps.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "description": "File name stem, e.g. node-network"
+              },
+              "reference": {
+                "type": "string",
+                "description": "The reference image: an asset name or an absolute path."
+              },
+              "size": {
+                "type": "string",
+                "enum": [
+                  "1536x1024",
+                  "1024x1024",
+                  "1024x1536"
+                ]
+              },
+              "use": {
+                "type": "boolean",
+                "description": "Set it as the look's motif (default true)."
+              },
+              "on": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "marked"
+                ]
+              },
+              "placement": {
+                "type": "string",
+                "enum": [
+                  "cover",
+                  "right",
+                  "left",
+                  "faint"
+                ]
+              },
+              "opacity": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              },
+              "baseHash": {
+                "type": "string",
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+              }
+            },
+            "required": [
+              "prompt"
+            ]
+          },
+          "requiresApproval": true
+        },
+        {
+          "name": "viewSlide",
+          "description": "Look at one slide as it renders (its last step), with the design reference beside it: the reference asset by default, or compareWith (an asset name or absolute path). Use it after setting a custom look and after drafting, compare the two the way someone who knows the brand would (ground, headline face and weight, second-colour line, labels, motif, shapes, space), fix every difference and look again. Saves the deck first so the render is current.",
+          "risk": "read",
+          "requiresCapabilities": [
+            "vision"
+          ],
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "compareWith": {
+                "type": "string"
+              },
+              "compare": {
+                "type": "boolean",
+                "description": "false to see the slide alone."
+              }
+            }
+          },
+          "requiresApproval": false
+        },
+        {
+          "name": "saveLookAsBrand",
+          "description": "Save the deck's custom look as a brand other apps read (Canvas, PureSite, PureDesign): a pure-design-system .designsystem.json with a <name>.brand/ folder beside it holding the fonts (the brand's woff2 and the bundled OFL faces used), logos, the motif art and the reference images. Give path (absolute, ending .designsystem.json); optionally motifName and motifDescription (what the motif is, so another app can regenerate it), voice (tone rules), guidelines and logosOnDark.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "motifName": {
+                "type": "string"
+              },
+              "motifDescription": {
+                "type": "string"
+              },
+              "voice": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "guidelines": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "logosOnDark": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "path"
+            ]
           },
           "requiresApproval": true
         },

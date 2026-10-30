@@ -312,9 +312,14 @@ export function lookTokens(id: string): Record<string, string> {
     inverse: look.inverse,
     'on-inverse': look.onInverse,
     'inverse-muted': look.inverseMuted,
+    'accent-2': look.accent,
+    highlight: look.accent,
     'heading-font': look.font,
     'body-font': look.bodyFont,
     'mono-font': look.monoFont,
+    'label-font': look.bodyFont,
+    'heading-case': 'none',
+    radius: '0px',
     'heading-weight': type.headingWeight,
     'body-weight': type.bodyWeight,
     'strong-weight': type.strongWeight,
@@ -351,15 +356,27 @@ export function lookDeclarations(id: string): string {
 }
 
 /** Changes only our design tokens. Custom markup and inline author styles survive. */
+/** What only a custom look carries (customLook.ts); a stock look takes it off. */
+const CUSTOM_ONLY_TOKENS = ['--slide-motif', '--slide-motif-opacity']
+const CUSTOM_ONLY_DATA = ['data-look-name', 'data-deck-faces', 'data-motif-on', 'data-motif-placement']
+
 export function withDeckLook(html: string, id: string): string {
+  // A custom look needs its spec (withCustomLook); naming it alone changes nothing.
+  if (id === 'custom') return html
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const root = doc.querySelector<HTMLElement>('[data-deck-id], #deck')
   if (!root) return html
   const look = deckLook(id)
+  const leftover =
+    CUSTOM_ONLY_TOKENS.some(name => root.style.getPropertyValue(name)) ||
+    CUSTOM_ONLY_DATA.some(name => root.hasAttribute(name))
+  for (const name of CUSTOM_ONLY_TOKENS) root.style.removeProperty(name)
+  for (const name of CUSTOM_ONLY_DATA) root.removeAttribute(name)
   const tokens = Object.entries(lookTokens(look.id)).map(
     ([key, value]) => [`--slide-${key}`, value] as const,
   )
   if (
+    !leftover &&
     root.dataset.look === look.id &&
     tokens.every(([key, value]) => root.style.getPropertyValue(key).trim() === value)
   )

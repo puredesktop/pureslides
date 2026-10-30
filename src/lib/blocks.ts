@@ -66,13 +66,13 @@ const TEXT = `margin: 0; ${BODY}; font-size: var(--slide-size-body, 24px); line-
 /** The emphasised line of a pair: a card's title over its sentence. */
 const STRONG = `${BODY}; font-size: var(--slide-size-lead, 32px); font-weight: var(--slide-strong-weight, 620); line-height: var(--slide-leading-headline, 1.1); letter-spacing: var(--slide-tracking-headline, -0.015em); text-wrap: balance`
 /** Tracked capitals for the small words above things: a kicker, a step, a figure's unit. */
-const LABEL = `${BODY}; font-size: var(--slide-size-label, 18px); font-weight: var(--slide-label-weight, 600); line-height: 1.2; letter-spacing: var(--slide-tracking-label, 0.12em); text-transform: uppercase; font-variant-numeric: tabular-nums lining-nums`
+const LABEL = `font-family: var(--slide-label-font, var(--slide-body-font, system-ui, sans-serif)); font-size: var(--slide-size-label, 18px); font-weight: var(--slide-label-weight, 600); line-height: 1.2; letter-spacing: var(--slide-tracking-label, 0.12em); text-transform: uppercase; font-variant-numeric: tabular-nums lining-nums`
 const MUTED = 'color: var(--slide-muted, #4f5d76)'
 const ACCENT = 'color: var(--slide-accent, #2f52c8)'
 const PAD = 'padding: 80px 96px'
 
 function card(number: string, title: string, text: string): string {
-  return `<div style="display: flex; flex-direction: column; gap: 12px; padding: 26px 24px 28px; border-top: 3px solid var(--slide-accent, #2f52c8); background: var(--slide-surface, #eaf0fb)">
+  return `<div style="display: flex; flex-direction: column; gap: 12px; padding: 26px 24px 28px; border-top: 3px solid var(--slide-accent, #2f52c8); border-radius: var(--slide-radius, 0px); background: var(--slide-surface, #eaf0fb)">
       <div style="${LABEL}; ${ACCENT}">${number}</div>
       <div style="${BODY}; font-size: var(--slide-size-body, 24px); font-weight: var(--slide-strong-weight, 620); line-height: 1.2; letter-spacing: var(--slide-tracking-headline, -0.015em); text-wrap: balance">${title}</div>
       <div style="${TEXT}; font-size: var(--slide-size-label, 18px); ${MUTED}">${text}</div>
@@ -80,7 +80,7 @@ function card(number: string, title: string, text: string): string {
 }
 
 function stage(step: number, label: string, text: string): string {
-  return `<div data-step="${step}" style="flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 26px 26px 30px; border-top: 3px solid var(--slide-accent, #2f52c8); background: var(--slide-surface, #eaf0fb)">
+  return `<div data-step="${step}" style="flex: 1; display: flex; flex-direction: column; gap: 12px; padding: 26px 26px 30px; border-top: 3px solid var(--slide-accent, #2f52c8); border-radius: var(--slide-radius, 0px); background: var(--slide-surface, #eaf0fb)">
       <div style="${LABEL}; ${ACCENT}">${label}</div>
       <div style="${STRONG}">${text}</div>
     </div>`

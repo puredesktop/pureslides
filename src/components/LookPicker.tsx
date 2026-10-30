@@ -2,22 +2,44 @@ import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
 import { DECK_LOOKS } from '../lib/deckLooks'
 import { installAppFonts } from '../fonts/packageFonts'
+import { familyStack } from '../fonts/registry'
+import type { CustomLookSpec } from '../lib/customLook'
+
+/** A custom look drawn as a tile like the stock ones: the deck's own, chosen by its agent from a reference or brand. */
+function customTile(spec: CustomLookSpec) {
+  return {
+    id: 'custom',
+    label: spec.name,
+    note: 'Your organisation’s look',
+    bg: spec.colors.bg,
+    ink: spec.colors.ink,
+    accent: spec.colors.accent,
+    surface: spec.colors.surface,
+    bodyFont: familyStack(spec.type.label === 'mono' ? spec.type.mono : spec.type.body),
+    font: familyStack(spec.type.heading),
+    weight: String(spec.type.headingWeight),
+    type: { labelWeight: String(spec.type.labelWeight), tracking: { display: spec.type.trackingDisplay }, leading: { display: 1.02 } },
+  }
+}
 
 /** The same palettes are used for these previews, starter slides and AI guidance. */
 export function LookPicker({
   value,
   onChange,
   disabled = false,
+  custom = null,
 }: {
   value: string
   onChange: (value: string) => void
   disabled?: boolean
+  /** The deck's custom look, shown first when it wears one. */
+  custom?: CustomLookSpec | null
 }) {
   // The samples are set in the faces the decks get.
   installAppFonts()
   return (
     <Choices role="group" aria-label="Presentation style">
-      {DECK_LOOKS.map(look => (
+      {[...(custom ? [customTile(custom)] : []), ...DECK_LOOKS].map(look => (
         <Choice
           key={look.id}
           type="button"
