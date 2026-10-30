@@ -67,15 +67,53 @@ what it is looking at.
 
 ## Reach for a composition, don't invent one
 
-`listBlocks` offers fourteen layouts that carry meaning in their arrangement
+`listBlocks` offers seventeen layouts that carry meaning in their arrangement
 — title, statement, points that build, cards, two column, full-bleed image,
-screenshot, quote, number, before-and-after, sequence, agenda, divider, end
-card. Each says what it is FOR and how many presses it takes. `addBlock` adds
-one; then edit it like any other slide.
+full-bleed video, video, screenshot, quote, number, key figures,
+before-and-after, sequence, agenda, divider, end card. Each says what it is
+FOR and how many presses it takes. `addBlock` adds one; then edit it like any
+other slide.
 
 Use them. A deck written from nothing comes out as fifteen headline-and-
 bullets slides, because that is the shape that always fits — and a room can
 feel it.
+
+## Type — the look sets it; write with its tokens
+
+A look is a palette AND a type voice: a heading face, a body face and a mono
+face that ship with the app (open-licence, no network), a modular scale, and
+the weight, leading, tracking and line length for each level. Seven looks:
+Auto (Inter), Ink (Space Grotesk over IBM Plex Sans, dark), Paper (Newsreader
+Display over Newsreader), Signal (Bricolage Grotesque over Inter), Brief
+(Archivo, dense), Gallery (Instrument Serif over Instrument Sans) and Clear
+(Atkinson Hyperlegible Next, larger). All of it lands on the deck root as
+`--slide-*` tokens, and every block reads them, so a block reads right in
+every look.
+
+Write slides the same way — inline styles with the tokens, never raw sizes or
+font names: `font-size: var(--slide-size-headline)` for an `<h1>`,
+`--slide-size-display` for a title or statement, `--slide-size-lead`,
+`--slide-size-body`, `--slide-size-label` (uppercase with
+`--slide-tracking-label`) and `--slide-size-stat`; leading
+`--slide-leading-*`, tracking `--slide-tracking-*`, line length
+`max-width: var(--slide-measure-body)`; families `--slide-heading-font`,
+`--slide-body-font`, `--slide-mono-font`. Never write `@font-face` or link a
+font: the deck's `<style data-deck-type>` is derived from the tokens on every
+edit, points at the faces in the package's `assets/fonts/`, and gives every
+slide balanced headlines, pretty paragraphs, tabular figures in tables and
+`[data-num]`, and no fake bold. A deck whose root has no type tokens (made
+before looks had type) is left alone until a look is chosen.
+
+`checkDeck` warns — never blocks — about type a room will notice:
+`type-too-small` (under 18px on a 1280-wide slide, scaled for wider ones),
+`type-measure` (body lines past 75 characters), `type-families` (more than two
+typefaces; a mono face for code does not count), `type-widow` (a headline
+ending on one word), `type-words` (over 60 words on a slide), `type-contrast`
+(under 4.5:1, or 3:1 for large text) and `type-hierarchy` (a headline smaller
+than the text under it; a figure may be larger). Fix them like layout
+findings. For how to choose a look, pair, scale, align, colour and space a
+deck, and for the final visual review, read the **Slide typography and
+design** skill.
 
 ## Video on a slide
 
@@ -239,6 +277,7 @@ carrying the content forward.
 | Retype one element | `getDeckContext` → `setElementText` |
 | Rewrite one element | `getDeckContext` → `setElement` |
 | Add a ready-made layout | `listBlocks` → `addBlock` |
+| Set the type | choose a look; write sizes and faces with `--slide-*` tokens |
 | Put a clip on a slide | `addAsset` → `addBlock` (`video-full` or `video`, with `asset`) |
 | Remove one element | `getDeckContext` → `deleteElement` |
 | Make something arrive on a press | `setElementStep` |

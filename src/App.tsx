@@ -1,4 +1,5 @@
 import { lookFromHtml, withDeckLook } from './lib/deckLooks'
+import { writeDeckFonts } from './fonts/packageFonts'
 import type { DeckAgentToolContext } from './agents/catalog'
 import {
   useVideoDrop,
@@ -1776,6 +1777,8 @@ export function App(): React.ReactElement {
               )
             : undefined
 
+        // The renderers load the deck from the package: its faces must be there.
+        await writeDeckFonts(path, exportHtml, { createFolder, writeBinaryFile, listFiles })
         const result = await exportDeck({
           html: exportHtml,
           slides: exportSlides,
@@ -1867,6 +1870,15 @@ export function App(): React.ReactElement {
    * named — a slide that gets its video after the material was listed
    * would otherwise show the package path, which a frame cannot load.
    */
+  // The deck's faces travel in its package, so the folder opens anywhere as
+  // the board shows it. Written once per file; a failure only costs the
+  // standalone copy its fonts, and export writes them again first.
+  useEffect(() => {
+    const path = boundPathRef.current
+    if (!path) return
+    void writeDeckFonts(path, document.html, { createFolder, writeBinaryFile, listFiles }).catch(() => undefined)
+  }, [document.html])
+
   useEffect(() => {
     const path = boundPathRef.current
     if (!path) return

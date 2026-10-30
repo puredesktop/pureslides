@@ -18,3 +18,23 @@ Consult the installed version’s license and notices before redistributing depe
 | `react` | `^19.1.0` | [react](https://github.com/react/react) |
 | `react-dom` | `^19.1.0` | [react-dom](https://github.com/react/react) |
 | `styled-components` | `^6.1.18` | [styled-components](https://github.com/styled-components/styled-components) |
+
+## Bundled fonts
+
+The faces a deck's look uses ship with the app in `src/fonts/` (Latin subsets as
+woff2, from the Fontsource packages named in `src/fonts/registry.ts`) and are
+copied into each deck package's `assets/fonts/`. Each is licensed under the SIL
+Open Font License 1.1; the licence and copyright lines are in
+`src/fonts/licenses/`. Newsreader Display is Newsreader's variable font pinned
+at its display optical size (opsz 72) with fontTools; it keeps the OFL.
+
+| Family | Upstream | Licence |
+| --- | --- | --- |
+| Inter | [rsms/inter](https://github.com/rsms/inter) | OFL-1.1 |
+| Space Grotesk | [floriankarsten/space-grotesk](https://github.com/floriankarsten/space-grotesk) | OFL-1.1 |
+| IBM Plex Sans, IBM Plex Mono | [IBM/plex](https://github.com/IBM/plex) | OFL-1.1 |
+| Newsreader | [productiontype/Newsreader](https://github.com/productiontype/Newsreader) | OFL-1.1 |
+| Bricolage Grotesque | [ateliertriay/bricolage](https://github.com/ateliertriay/bricolage) | OFL-1.1 |
+| Archivo | [Omnibus-Type/Archivo](https://github.com/Omnibus-Type/Archivo) | OFL-1.1 |
+| Instrument Serif, Instrument Sans | [Instrument](https://github.com/Instrument) | OFL-1.1 |
+| Atkinson Hyperlegible Next | [googlefonts/atkinson-hyperlegible-next](https://github.com/googlefonts/atkinson-hyperlegible-next) | OFL-1.1 |
