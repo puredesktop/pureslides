@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   context: null as unknown as DeckAgentToolContext,
   newDeck: null as unknown as () => void,
+  brandsOffered: false,
+  defaultBrand: vi.fn(),
 }))
 vi.mock('@purescience/platform-ui/bridge/react/usePlatformBridge', () => ({
   usePlatformBridge: () => ({ ready: true, meta: {} }),
@@ -67,7 +69,7 @@ vi.mock('./bridge/platformBridge', () => ({
   readTextFile: mocks.read,
   listFiles: mocks.list,
   readBinaryDataUrl: mocks.binary,
-  readBinaryBase64: vi.fn(),
+  readBinaryBase64: vi.fn(async () => ({ base64: 'iVBORw0KGgo=', mimeType: 'image/png' })),
   writeTextFile: vi.fn(),
   writeBinaryFile: vi.fn(),
   createFolder: vi.fn(),
@@ -76,6 +78,13 @@ vi.mock('./bridge/platformBridge', () => ({
   revealPath: vi.fn(),
   cancelShellRender: vi.fn(),
   isStandaloneDevMode: () => false,
+  brandsOffered: () => mocks.brandsOffered,
+  defaultBrand: mocks.defaultBrand,
+  getBrand: vi.fn(),
+  listBrands: vi.fn(async () => []),
+  onBrandsChanged: () => () => {},
+  proposeBrand: vi.fn(),
+  proposeBrandSamples: vi.fn(),
 }))
 vi.mock('./components/SlideBoardView', () => ({
   SlideBoardView: ({ previews, onLook }: { previews: Record<string, string>; onLook: (look: string) => void }) => {
@@ -117,6 +126,8 @@ async function render(path?: string) {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.brandsOffered = false
+  mocks.defaultBrand.mockResolvedValue(null)
   files.clear()
   mocks.resource = null
   packageAt('/A.deck', htmlA, 'Deck A')
@@ -257,4 +268,42 @@ it('persists a style change through the document lifecycle without rewriting the
   expect(files.get('/A.deck/index.html')).toContain('data-look="paper"')
   expect(JSON.parse(files.get('/A.deck/manifest.json')!).look).toBe('paper')
   expect(files.get('/B.deck/index.html')).toBe(htmlB)
+})
+
+const HOUSE = '/u/brands/organisation/pure-science/pure-science.designsystem.json'
+function withHouseStyle() {
+  mocks.brandsOffered = true
+  files.set(
+    HOUSE,
+    JSON.stringify({
+      format: 'pure-design-system',
+      version: 1,
+      id: 'pure-science',
+      name: 'pure.science',
+      guidelines: [],
+      components: [],
+      tokens: { colors: { background: '#0b1222', text: '#ffffff', accent: '#3b6fe8' }, typography: { display: 'Inter' } },
+      motifs: [{ name: 'Research network', description: 'Glowing nodes.', file: 'pure-science.brand/motifs/network.png' }],
+    }),
+  )
+  mocks.defaultBrand.mockResolvedValue({ id: 'organisation:pure-science', name: 'pure.science', path: HOUSE, samples: [] })
+}
+it('a new deck starts in the organisation house style and says so', async () => {
+  withHouseStyle()
+  await render('/A.deck')
+  // An opened deck keeps its own look.
+  expect(mocks.context.document.html).toBe(htmlA)
+  await act(async () => mocks.newDeck())
+  await vi.waitFor(() => expect(mocks.context.document.html).toContain('data-look-name="pure.science"'))
+  expect(mocks.context.documentPath).toBe('/Draft.deck')
+  expect(mocks.context.houseStyle?.name).toBe('pure.science')
+  expect(files.get('/A.deck/index.html')).toBe(htmlA)
+})
+it('with no organisation a new deck keeps the stock look', async () => {
+  mocks.brandsOffered = true
+  await render('/A.deck')
+  await act(async () => mocks.newDeck())
+  await act(async () => {})
+  expect(mocks.context.document.html).toContain('data-look="auto"')
+  expect(mocks.context.documentPath).toBeNull()
 })

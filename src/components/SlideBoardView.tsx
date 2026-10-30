@@ -19,6 +19,7 @@ import { createDefaultDeckDocument } from '../lib/deckDocument'
 import { clearSlides, addSlide } from '../lib/slides'
 import { withDeckLook } from '../lib/deckLooks'
 import { LookPicker } from './LookPicker'
+import { houseStyleCaption } from '../lib/houseStyle'
 import { customLookFromHtml } from '../lib/customLook'
 import { containDialogFocus } from './dialogFocus'
 import type { BoardTab, DeckGeometry, PickedElement } from '../types'
@@ -79,6 +80,10 @@ interface SlideBoardViewProps {
   revisionCount: number
   /** The open deck's path — only tags the board for the agent activity layer. */
   documentPath?: string | null
+  /** The organisation's house style's name, when the deck is in it. */
+  houseStyleName?: string | null
+  /** Opens "Propose to organisation…"; absent when this desktop cannot propose. */
+  onPropose?: () => void
 }
 
 export function SlideBoardView({
@@ -122,6 +127,8 @@ export function SlideBoardView({
   onRecheck,
   onHistory,
   revisionCount,
+  houseStyleName = null,
+  onPropose,
   documentPath = null,
 }: SlideBoardViewProps): React.ReactElement {
   const slide: Slide | undefined = slides[selected] ?? slides[0]
@@ -601,8 +608,17 @@ export function SlideBoardView({
           {inspector === 'design' ? <DesignSection>
             <DesignTitle>Set the tone.</DesignTitle>
             <DesignNote>A coordinated palette and type pairing for your presentation.</DesignNote>
-            {onLook ? <LookPicker value={look} onChange={onLook} custom={look === 'custom' ? customLookFromHtml(html) : null} /> : null}
+            {houseStyleName ? <HouseStyleNote>{houseStyleCaption(houseStyleName)}</HouseStyleNote> : null}
+            {onLook ? <LookPicker value={look} onChange={onLook} custom={look === 'custom' ? customLookFromHtml(html) : null} houseStyle={Boolean(houseStyleName)} /> : null}
             <DesignNote>Updates layouts using presentation styles. Custom colors and fonts stay as authored.</DesignNote>
+            {onPropose ? (
+              <ProposeRow>
+                <OpButton type="button" onClick={onPropose}>
+                  Propose to organisation…
+                </OpButton>
+                <DesignNote>Offer this deck’s look, or its slides as examples, for everyone in your organisation to use.</DesignNote>
+              </ProposeRow>
+            ) : null}
           </DesignSection> : <>
           <Ops>
             <OpButton type="button" disabled={slide.index === 0} onClick={() => onMove(slide.index, slide.index - 1)}>
@@ -1674,4 +1690,6 @@ const InspectorTabs = styled(Tabs)`> button { flex: 1; justify-content: center; 
 const DesignSection = styled.div`display: flex; flex-direction: column; gap: 14px;`
 const DesignTitle = styled.div`font-size: 20px; font-weight: 600; letter-spacing: -.035em;`
 const DesignNote = styled.p`margin: 0; font-size: 12px; line-height: 1.5; color: var(--pure-chrome-soft);`
+const HouseStyleNote = styled.p`margin: 0; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--platform-colors-text);`
+const ProposeRow = styled.div`display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--pure-chrome-line); button { padding: 0 12px; align-self: flex-start; }`
 const LayoutPreview = styled.span`display: flex; justify-content: center; overflow: hidden; width: 100%; margin-bottom: 8px; border-radius: 5px; pointer-events: none; background: var(--pure-chrome-well);`

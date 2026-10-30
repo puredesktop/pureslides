@@ -162,7 +162,36 @@ import {
   revealPath,
   writeBinaryFile,
   writeTextFile,
+  brandsOffered,
+  defaultBrand,
+  getBrand,
+  listBrands,
+  onBrandsChanged,
+  proposeBrand,
+  proposeBrandSamples,
 } from './bridge/platformBridge'
+import type { DeckBrandAccess } from './agents/catalog'
+import {
+  proposeBrandFromDeck,
+  proposeDeckSamples,
+  startInHouseStyle,
+} from './agents/orgTools'
+import {
+  houseStyleCaption,
+  wearsHouseStyle,
+  type HouseStyle,
+} from './lib/houseStyle'
+import { customLookFromHtml } from './lib/customLook'
+import { ProposeDialog } from './components/ProposeDialog'
+
+/** The shell's brands, as the agent tools and the app's controls reach them. */
+const BRAND_ACCESS: DeckBrandAccess = {
+  list: listBrands,
+  get: getBrand,
+  default: defaultBrand,
+  propose: proposeBrand,
+  proposeSamples: proposeBrandSamples,
+}
 import type { BoardTab, PickedElement } from './types'
 import { createDeckTransitions } from './lib/deckTransitions'
 import { readDeckPackage } from './lib/deckPackage'
@@ -256,6 +285,48 @@ export function App(): React.ReactElement {
   const [look, setLook] = useState(DEFAULT_LOOK)
   const lookRef = useRef(look)
   lookRef.current = look
+  /** Whether the person chose this deck's look themselves: then the house style never replaces it. */
+  const lookChosenRef = useRef(false)
+
+  // The organisation's house style, read once and again whenever it changes. Null with no organisation.
+  const [houseStyle, setHouseStyle] = useState<HouseStyle | null>(null)
+  const houseStyleRef = useRef<HouseStyle | null>(null)
+  houseStyleRef.current = houseStyle
+  /** The brand file last saved from each deck (by package path): what "propose this deck's brand" sends. */
+  const savedBrandsRef = useRef(new Map<string, string>())
+  const [proposeOpen, setProposeOpen] = useState(false)
+  /** The agent's context as of the last render: the app's own controls call the same tool code with it. */
+  const agentContextRef = useRef<DeckAgentToolContext | null>(null)
+  useEffect(() => {
+    if (!ready || standaloneDev || !brandsOffered()) return
+    let live = true
+    const load = (): void => {
+      defaultBrand()
+        .then(brand => {
+          if (!live) return
+          setHouseStyle(
+            brand
+              ? {
+                  id: brand.id,
+                  name: brand.name,
+                  path: brand.path,
+                  ...(brand.organisation ? { organisation: brand.organisation } : {}),
+                  samples: brand.samples ?? [],
+                }
+              : null,
+          )
+        })
+        .catch(() => {
+          if (live) setHouseStyle(null)
+        })
+    }
+    load()
+    const stop = onBrandsChanged(load)
+    return () => {
+      live = false
+      stop()
+    }
+  }, [ready, standaloneDev])
   const [busy, setBusy] = useState<null | 'describing' | 'drafting'>(null)
 
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -1673,6 +1744,31 @@ export function App(): React.ReactElement {
    */
   const previousDeckPathRef = useRef<string | null>(null)
 
+  /**
+   * Put the organisation's house style on the deck just created: the same
+   * code createDeck runs for the agent. The package is made for it (the
+   * brand's fonts, motif and logos go into it); a look the person picks
+   * meanwhile, or a reference, wins.
+   */
+  const startNewDeckInHouseStyle = useCallback(async (): Promise<void> => {
+    const deck = documentRef.current
+    try {
+      const path = await ensureWizardDraft()
+      const context = agentContextRef.current
+      if (!path || !context || documentRef.current !== deck) return
+      const started = await startInHouseStyle(context, {
+        html: deck.html,
+        material: materialRef.current,
+        chosen: () => lookChosenRef.current || boundPathRef.current !== path,
+      })
+      if (started?.applied && started.name) setStatus(houseStyleCaption(started.name))
+    } catch (houseError) {
+      setStatus(
+        `Could not start in your organisation’s house style: ${houseError instanceof Error ? houseError.message : String(houseError)}`,
+      )
+    }
+  }, [ensureWizardDraft])
+
   const createNewDeck = useCallback(async (): Promise<void> => {
     if (exportingRef.current || drawerCommitBusy.current) {
       setError(
@@ -1681,10 +1777,11 @@ export function App(): React.ReactElement {
       return
     }
     try {
-      await transitions.run(
+      const started = await transitions.run(
         async () => createDefaultDeckDocument(),
         next => {
           setSwitcherOpen(false)
+          lookChosenRef.current = false
           previousDeckPathRef.current = boundPathRef.current
           boundPathRef.current = null
           lifecycleRef.current.reset()
@@ -1720,10 +1817,12 @@ export function App(): React.ReactElement {
           // First write creates the draft after the new suggested title renders.
         },
       )
+      // With an organisation house style, the new deck starts in it — unless the person picks a look first.
+      if (started && houseStyleRef.current) void startNewDeckInHouseStyle()
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error))
     }
-  }, [transitions, setDocumentNow, history, clearEvidence])
+  }, [transitions, setDocumentNow, history, clearEvidence, startNewDeckInHouseStyle])
 
   const cancelNewDeck = useCallback((): void => {
     setWizardOpen(false)
@@ -1989,6 +2088,7 @@ export function App(): React.ReactElement {
       const applied = await transitions.run(
         async () => next,
         value => {
+          lookChosenRef.current = false
           boundPathRef.current = null
           lifecycleNow.reset()
           setDocumentNow(value)
@@ -2062,6 +2162,7 @@ export function App(): React.ReactElement {
         agentEdit(options, 'deck'),
       )
       if (result.ok) {
+        lookChosenRef.current = true
         lookRef.current = next
         setLook(next)
         lifecycleRef.current.markDirty()
@@ -2087,6 +2188,34 @@ export function App(): React.ReactElement {
       writeText: (path, text) => writeTextFile(path, text),
       writeBase64: writeBinaryFile,
       ensureFolder: ensureFolderPath,
+    },
+    brands: brandsOffered() ? BRAND_ACCESS : null,
+    houseStyle,
+    // Read when asked, not when rendered: saveLookAsBrand records it without a render.
+    get savedBrandPath() {
+      const path = boundPathRef.current
+      return path ? (savedBrandsRef.current.get(path) ?? null) : null
+    },
+    rememberSavedBrand: saved => {
+      const path = boundPathRef.current
+      if (path) savedBrandsRef.current.set(path, saved)
+    },
+    exportSlideImages: async () => {
+      // The images export: the same render and the same layout check as the Export button.
+      const folder = await runExport('images', false)
+      const count = slidesFromHtml(documentRef.current.html).length
+      const listing = (await listFiles(folder)) as {
+        entries?: { name?: string; isDirectory?: boolean }[]
+      }
+      return (listing?.entries ?? [])
+        .filter(entry => entry?.name && !entry.isDirectory)
+        .map(entry => entry.name as string)
+        .filter(name => {
+          // A shorter deck leaves an earlier export's extra pictures behind: only this deck's slides.
+          const n = Number(/^slide-(\d+)\.png$/i.exec(name)?.[1])
+          return Number.isInteger(n) && n >= 1 && n <= count
+        })
+        .map(name => `${folder}/${name}`)
     },
     writePackageFile: async (relative, base64) => {
       const path = boundPathRef.current
@@ -2230,10 +2359,14 @@ export function App(): React.ReactElement {
     runExport,
     stopExport,
   }
+  agentContextRef.current = agentContext
   usePureSlidesAgentTools(true, agentContext, () => !transitions.busy)
 
   const hasOpenDeck =
     documentStarted || documentPath !== null || lifecycle.doc.path !== null
+  /** The custom look's name the deck wears, and that name again when it is the organisation's house style. */
+  const deckLookName = useMemo(() => customLookFromHtml(document.html)?.name ?? null, [document.html])
+  const deckHouseStyleName = wearsHouseStyle(deckLookName, houseStyle) ? deckLookName : null
 
   // One verb beside the status line: Retry a refused ask, or Undo the
   // last revision (which restores the snapshot taken before it).
@@ -2319,9 +2452,12 @@ export function App(): React.ReactElement {
               )
             }
             look={look}
+            custom={deckLookName ? customLookFromHtml(document.html) : null}
+            houseStyleName={deckHouseStyleName}
             onLook={next => {
               const result = editHtml(html => withDeckLook(html, next), 'Presentation style updated.')
               if (result.ok) {
+                lookChosenRef.current = true
                 lookRef.current = next
                 setLook(next)
                 lifecycleRef.current.markDirty()
@@ -2390,6 +2526,24 @@ export function App(): React.ReactElement {
                 : { ok: false, message: result.message }
             }}
           />
+          <ProposeDialog
+            open={proposeOpen}
+            onClose={() => setProposeOpen(false)}
+            lookName={deckLookName}
+            houseStyleName={houseStyle?.name ?? null}
+            deckIsHouseStyle={deckHouseStyleName !== null}
+            savedBrandPath={agentContext.savedBrandPath}
+            onProposeLook={async note => {
+              const context = agentContextRef.current
+              if (!context) throw Error('The deck is still opening.')
+              return (await proposeBrandFromDeck(context, { note })).message
+            }}
+            onProposeSlides={async note => {
+              const context = agentContextRef.current
+              if (!context) throw Error('The deck is still opening.')
+              return (await proposeDeckSamples(context, { note })).message
+            }}
+          />
           <HistoryDialog
             open={historyOpen}
             onClose={() => setHistoryOpen(false)}
@@ -2409,6 +2563,7 @@ export function App(): React.ReactElement {
           onLook={next => {
             const result = editHtml(html => withDeckLook(html, next), 'Presentation style updated.')
             if (result.ok) {
+              lookChosenRef.current = true
               lookRef.current = next
               setLook(next)
               lifecycleRef.current.markDirty()
@@ -2507,6 +2662,8 @@ export function App(): React.ReactElement {
           onRecheck={() => void recheckLayout()}
           onHistory={() => setHistoryOpen(true)}
           revisionCount={revisions.entries.length}
+          houseStyleName={deckHouseStyleName}
+          onPropose={brandsOffered() ? () => setProposeOpen(true) : undefined}
           documentPath={lifecycle.doc.path ?? documentPath}
         />
       ) : (

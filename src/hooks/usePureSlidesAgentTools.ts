@@ -12,6 +12,11 @@ import {
   setCustomLookHandler,
   viewSlideHandler,
 } from '../agents/lookTools'
+import {
+  listBrandsHandler,
+  proposeBrandToOrganisationHandler,
+  proposeSamplesToOrganisationHandler,
+} from '../agents/orgTools'
 import type { AgentToolHandler } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import { usePlatformAgentTools } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import {
@@ -57,6 +62,7 @@ import {
 
 const READ_ONLY_TOOLS = new Set([
   'listLookFonts',
+  'listBrands',
   'viewSlide',
   'getDeckContext',
   'getSlide',
@@ -135,6 +141,11 @@ export function usePureSlidesAgentTools(
       makeMotifHandler(contextRef.current, invoke.arguments ?? {}),
     saveLookAsBrand: async invoke =>
       saveLookAsBrandHandler(contextRef.current, invoke.arguments ?? {}),
+    listBrands: async () => listBrandsHandler(contextRef.current),
+    proposeBrandToOrganisation: async invoke =>
+      proposeBrandToOrganisationHandler(contextRef.current, invoke.arguments ?? {}),
+    proposeSamplesToOrganisation: async invoke =>
+      proposeSamplesToOrganisationHandler(contextRef.current, invoke.arguments ?? {}),
     viewSlide: async invoke =>
       viewSlideHandler(contextRef.current, invoke.arguments ?? {}),
     getDrawerRequest: async () => ({

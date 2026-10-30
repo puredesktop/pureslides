@@ -12,6 +12,8 @@ import { useEffect } from 'react'
 import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
 import { LookPicker } from './LookPicker'
+import type { CustomLookSpec } from '../lib/customLook'
+import { houseStyleCaption } from '../lib/houseStyle'
 import { containDialogFocus } from './dialogFocus'
 import { ASSET_ROLES, type MaterialItem } from '../lib/material'
 import type { AssetRole } from '../lib/assetNotes'
@@ -41,6 +43,10 @@ interface NewDeckWizardProps {
   geometry: DeckGeometry
   look: string
   onLook: (look: string) => void
+  /** The deck's custom look, shown first when it wears one. */
+  custom?: CustomLookSpec | null
+  /** The organisation's house style's name, when the deck is in it. */
+  houseStyleName?: string | null
   onFormat: (width: number, height: number) => void
   material: MaterialItem[]
   previews: Record<string, string>
@@ -61,6 +67,8 @@ export function NewDeckWizard({
   onSlideCount,
   look,
   onLook,
+  custom = null,
+  houseStyleName = null,
   geometry,
   onFormat,
   material,
@@ -188,7 +196,13 @@ export function NewDeckWizard({
 
         <Field>
           <Label>Choose a visual direction</Label>
-          <LookPicker value={look} onChange={onLook} disabled={busy} />
+          <LookPicker value={look} onChange={onLook} disabled={busy} custom={custom} houseStyle={Boolean(houseStyleName)} />
+          {houseStyleName ? (
+            <Hint>
+              {houseStyleCaption(houseStyleName)} Choose another look here if this
+              deck needs one.
+            </Hint>
+          ) : null}
           <Hint>
             A file marked <em>design reference</em> always wins — the deck is
             drawn to match it.

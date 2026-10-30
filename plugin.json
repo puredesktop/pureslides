@@ -170,13 +170,17 @@
         },
         {
           "name": "createDeck",
-          "description": "Start a new deck package and open it.",
+          "description": "Start a new deck package and open it. With no brand given, a new deck starts in the organisation's house style when the desktop has one (the reply names it and lists its sample images: look at them with view_image before writing slides, and tell the person which brand the deck is in). brand names another brand to start in (an id from listBrands or a .designsystem.json path), or 'none' for a stock look, only when the person asked for that.",
           "inputSchema": {
             "type": "object",
             "properties": {
               "title": {
                 "type": "string",
                 "description": "What the deck is called; names the file too."
+              },
+              "brand": {
+                "type": "string",
+                "description": "Optional. An id from listBrands or the absolute path of a .designsystem.json to start in, or 'none' to start in a stock look. Leave it out to start in the organisation's house style."
               }
             },
             "required": [
@@ -609,7 +613,7 @@
         },
         {
           "name": "setLook",
-          "description": "Choose one of the seven STOCK looks: a palette AND a type voice (bundled faces, a modular scale, leading, tracking, line lengths), set as --slide-* tokens. auto: Inter, neutral. ink: Space Grotesk over IBM Plex Sans, dark. paper: Newsreader Display over Newsreader, editorial. signal: Bricolage Grotesque over Inter, bold. brief: Archivo, dense. gallery: Instrument Serif over Instrument Sans. clear: Atkinson Hyperlegible Next, largest. NOT for a deck in an organisation's established look: when the person gives a reference image or a brand, or the deck has a reference asset, build a custom look with setCustomLook instead (this tool refuses while a reference is attached unless ignoreReference is true).",
+          "description": "Choose one of the seven STOCK looks: a palette AND a type voice (bundled faces, a modular scale, leading, tracking, line lengths), set as --slide-* tokens. auto: Inter, neutral. ink: Space Grotesk over IBM Plex Sans, dark. paper: Newsreader Display over Newsreader, editorial. signal: Bricolage Grotesque over Inter, bold. brief: Archivo, dense. gallery: Instrument Serif over Instrument Sans. clear: Atkinson Hyperlegible Next, largest. NOT for a deck in an organisation's established look: when the person gives a reference image or a brand, or the deck has a reference asset, build a custom look with setCustomLook instead (this tool refuses while a reference is attached unless ignoreReference is true). It also refuses on a deck in the organisation's house style unless ignoreHouseStyle is true: keep the house style unless the person asked for another look.",
           "inputSchema": {
             "type": "object",
             "properties": {
@@ -632,6 +636,10 @@
               "ignoreReference": {
                 "type": "boolean",
                 "description": "Only when the person explicitly asked for this stock look despite an attached design reference."
+              },
+              "ignoreHouseStyle": {
+                "type": "boolean",
+                "description": "Only when the person explicitly asked for this stock look on a deck that is in the organisation's house style."
               }
             },
             "required": [
@@ -652,13 +660,13 @@
         },
         {
           "name": "setCustomLook",
-          "description": "Make the deck in an organisation's OWN look — the only right tool when the person gives a reference image or a brand, or asks for 'our look and feel'. Look at the reference first (view_image with its path). Then give either brand (a .designsystem.json; its fonts, logos and motif files are brought into the deck) or explicit tokens read from the reference, or both (explicit wins): colors by role (bg ground, ink text, muted, accent, accent2 e.g. a second-colour headline line, highlight e.g. a small bright tag colour, surface, line, inverse/onInverse for a filled panel), fonts (heading, body, mono, label: 'mono' when the brand sets tags in a monospace, headingWeight e.g. 800 for a heavy display, headingCase), scale (base, ratio), radius (px, cards and buttons) and motif (an asset, usually one made with makeMotif: on all slides or marked ones, placement cover|right|left|faint, opacity). Faces must be bundled (listLookFonts) or the brand's own woff2; anything else is replaced by the closest bundled face and said so. A second call adjusts the current custom look. Returns contrast warnings and what to do next: generate the reference's motif with makeMotif when the look has none, then compare with viewSlide.",
+          "description": "Make the deck in an organisation's OWN look — the only right tool when the person gives a reference image or a brand, or asks for 'our look and feel'. Look at the reference first (view_image with its path). Then give either brand (an id from listBrands, or a .designsystem.json path; its fonts, logos and motif files are brought into the deck) or explicit tokens read from the reference, or both (explicit wins): colors by role (bg ground, ink text, muted, accent, accent2 e.g. a second-colour headline line, highlight e.g. a small bright tag colour, surface, line, inverse/onInverse for a filled panel), fonts (heading, body, mono, label: 'mono' when the brand sets tags in a monospace, headingWeight e.g. 800 for a heavy display, headingCase), scale (base, ratio), radius (px, cards and buttons) and motif (an asset, usually one made with makeMotif: on all slides or marked ones, placement cover|right|left|faint, opacity). Faces must be bundled (listLookFonts) or the brand's own woff2; anything else is replaced by the closest bundled face and said so. A second call adjusts the current custom look. Returns contrast warnings and what to do next: generate the reference's motif with makeMotif when the look has none, then compare with viewSlide.",
           "inputSchema": {
             "type": "object",
             "properties": {
               "brand": {
                 "type": "string",
-                "description": "Absolute path of a .designsystem.json brand file."
+                "description": "A brand: an id from listBrands (the organisation's house style, the workspace's or the person's own) or the absolute path of a .designsystem.json brand file."
               },
               "name": {
                 "type": "string",
@@ -946,6 +954,70 @@
             "required": [
               "path"
             ]
+          },
+          "requiresApproval": true
+        },
+        {
+          "name": "listBrands",
+          "risk": "read",
+          "description": "The brands this desktop has, for making a deck in one: the organisation's (its house style first, marked default: true, with its sample images), the workspace's Brands folder and the person's own. Each has an id, a name, where it comes from, its path and a short summary (palette, fonts, logos, motifs, sample count). Pass an id to setCustomLook brand or createDeck brand. Read-only.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {}
+          },
+          "requiresApproval": false
+        },
+        {
+          "name": "proposeBrandToOrganisation",
+          "risk": "external",
+          "description": "Send a saved brand to the organisation's server for an administrator to approve as a house style. brand is an id from listBrands or the absolute path of a .designsystem.json; leave it out to propose the brand saved from this deck (saveLookAsBrand), which is saved now into the deck's package if it never was, with the deck's slides as its sample images when it has no reference. A house style needs at least one sample image. Refused when the desktop is not in an organisation. Optional note for the administrator. Tell the person the reply's message.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "brand": {
+                "type": "string",
+                "description": "An id from listBrands or a .designsystem.json path. Leave out for the brand saved from this deck."
+              },
+              "note": {
+                "type": "string",
+                "description": "A short note for the administrator: why this brand."
+              }
+            }
+          },
+          "requiresApproval": true
+        },
+        {
+          "name": "proposeSamplesToOrganisation",
+          "risk": "external",
+          "description": "Propose sample images for one of the organisation's brands (its house style when brand is left out): once an administrator approves them they join the brand's references, so every member's agents see them. With no images, the open deck's slides are exported as PNGs (the images export, which refuses an unverified layout) and sent: all of them up to 12, or the slides you name. images instead sends PNG, JPEG or WebP files by absolute path (at most 12). Optional note. Tell the person the reply's message.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "brand": {
+                "type": "string",
+                "description": "An organisation brand id from listBrands; leave out for the house style."
+              },
+              "slides": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "description": "Zero-based slide numbers to send; leave out for all (up to 12)."
+              },
+              "images": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 12,
+                "description": "Absolute paths of PNG, JPEG or WebP images to send instead of this deck's slides."
+              },
+              "note": {
+                "type": "string",
+                "description": "A short note for the administrator."
+              }
+            }
           },
           "requiresApproval": true
         },

@@ -21,6 +21,15 @@ import { slidesFromHtml } from '../lib/slides'
 import type { AssetRole } from '../lib/assetNotes'
 import type { DeckAgentToolContext, EditOptions } from './catalog'
 import { DECK_LOOKS, deckLook } from '../lib/deckLooks'
+import { customLookFromHtml } from '../lib/customLook'
+import { readBrandArgument, wearsHouseStyle } from '../lib/houseStyle'
+import { resolveBrandPath } from './lookTools'
+import {
+  startedWords,
+  startInBrand,
+  startInHouseStyle,
+  type StartedInBrand,
+} from './orgTools'
 
 const ROLES = ['content', 'reference', 'logo']
 const PATH = /^\d+(\.\d+)*$/
@@ -110,6 +119,15 @@ export function getDeckContextHandler(
       },
       revisions: context.listRevisions().length,
       documentPath: context.documentPath,
+      ...(context.houseStyle
+        ? {
+            houseStyle: {
+              name: context.houseStyle.name,
+              deckIsInIt: wearsHouseStyle(customLookFromHtml(context.document.html)?.name, context.houseStyle),
+              samples: context.houseStyle.samples,
+            },
+          }
+        : {}),
       view: ui.view,
       brief: ui.brief,
       targetSlides: ui.slideCount,
@@ -240,9 +258,34 @@ export async function createDeckHandler(
 ): Promise<AgentToolHandlerResult> {
   const title = readAgentToolStringArg(args, 'title')?.trim()
   if (!title) return agentToolErrorContent('title is required')
+  const brandArg = readBrandArgument(args.brand)
+  // A brand named up front is checked before anything is created.
+  let named: { path: string; name?: string; samples?: string[] } | null = null
+  if (brandArg && brandArg.kind !== 'none') {
+    const resolved = await resolveBrandPath(context, String(args.brand))
+    if ('error' in resolved) return agentToolErrorContent(resolved.error)
+    named = resolved
+  }
   try {
-    const path = await context.createAndOpen(createDefaultDeckDocument(title))
-    return { content: formatAgentToolJson({ created: true, title, path }) }
+    const next = createDefaultDeckDocument(title)
+    const path = await context.createAndOpen(next)
+    let started: StartedInBrand | null = null
+    let house = false
+    if (path && named) {
+      started = await startInBrand(context, named)
+    } else if (path && !brandArg) {
+      // No brand given: a new deck starts in the organisation's house style, when there is one.
+      started = await startInHouseStyle(context, { html: next.html, material: [] })
+      house = Boolean(started?.applied)
+    }
+    return {
+      content: formatAgentToolJson({
+        created: true,
+        title,
+        path,
+        ...startedWords(started, house),
+      }),
+    }
   } catch (error) {
     return agentToolErrorContent(
       error instanceof Error ? error.message : String(error),
@@ -548,6 +591,13 @@ export function setLookHandler(
   if (references.length && args.ignoreReference !== true) {
     return agentToolErrorContent(
       `this deck has a design reference (${references.join(', ')}): a stock look would ignore it. Look at the reference (view_image or viewSlide), then build its look with setCustomLook. Pass ignoreReference: true only if the person asked for the ${id} look.`,
+    )
+  }
+  // A deck in the organisation's house style keeps it unless the person asked for another look.
+  const wearing = context.houseStyle ? customLookFromHtml(context.document.html)?.name : undefined
+  if (wearsHouseStyle(wearing, context.houseStyle) && args.ignoreHouseStyle !== true) {
+    return agentToolErrorContent(
+      `this deck is in ${wearing}, your organisation's house style: a stock look would replace it. Keep it. Pass ignoreHouseStyle: true only if the person asked for the ${id} look.`,
     )
   }
   const look = deckLook(id)
