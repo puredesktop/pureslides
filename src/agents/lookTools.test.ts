@@ -68,6 +68,7 @@ describe('the house-style tools', () => {
     )
     expect(first).toMatchObject({ look: 'custom', name: 'pure.science', type: { heading: 'Inter', label: 'mono', headingWeight: 800 } })
     expect(first.next).toMatch(/viewSlide/)
+    expect(first.nextMotif).toMatch(/no image model/)
     const second = parsed(await setCustomLookHandler(deck.context, { fonts: { heading: 'Gotham' } }))
     expect(second.colors.bg).toBe('#0b1222')
     expect(second.type.heading).toBe('Montserrat')
@@ -111,7 +112,9 @@ describe('the house-style tools', () => {
         return { base64: PNG, mimeType: 'image/png', modelId: 'openai:gpt-image-1' }
       },
     })
-    await setCustomLookHandler(deck.context, { colors: { bg: '#0b1222', accent: '#3b6fe8', highlight: '#f2b84b' } })
+    const look = JSON.parse(String((await setCustomLookHandler(deck.context, { colors: { bg: '#0b1222', accent: '#3b6fe8', highlight: '#f2b84b' } })).content))
+    expect(look.nextMotif).toMatch(/generate it now with makeMotif/)
+    expect(look.next).toMatch(/^makeMotif/)
     const result = await makeMotifHandler(deck.context, { prompt: 'A network of glowing amber and blue nodes', name: 'Node network', reference: 'site.png' })
     const body = parsed(result)
     expect(body).toMatchObject({ file: 'assets/motifs/node-network.png', applied: true, model: 'openai:gpt-image-1' })
