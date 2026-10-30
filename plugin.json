@@ -162,7 +162,7 @@
         {
           "name": "checkDeck",
           "risk": "read",
-          "description": "Lint the deck before presenting or exporting: a missing deck root, build steps that skip a number, images, fonts or scripts loaded over the network, document.write calls that would erase the deck — and `layout`, the render's verification state: 'verified' (every slide measured cleanly with fonts loaded), 'checking' (not every slide has been measured in a visible frame with loaded fonts yet), or 'failed' with the slides whose text overlaps. Export refuses anything that is not verified.",
+          "description": "Lint the deck before presenting or exporting: a missing deck root, build steps that skip a number, images, fonts or scripts loaded over the network, document.write calls that would erase the deck — and `layout`, the render's verification state: 'verified' (every slide measured cleanly with fonts loaded), 'checking' (not every slide has been measured in a visible frame with loaded fonts yet), or 'failed' with the slides whose text overlaps. Export refuses anything that is not verified. Warnings (never blocking) also name type a room will notice and cards holding only a word or two (copy-thin-card: give each a claim from the brief or remove it).",
           "inputSchema": {
             "type": "object",
             "properties": {}
