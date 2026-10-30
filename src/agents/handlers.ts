@@ -543,6 +543,13 @@ export function setLookHandler(
       `look must be one of ${DECK_LOOKS.map(look => look.id).join(', ')}`,
     )
   }
+  // A deck with a design reference is made in that brand's look, never a stock one, unless the person asked for it.
+  const references = (context.material ?? []).filter(item => item.role === 'reference').map(item => item.name)
+  if (references.length && args.ignoreReference !== true) {
+    return agentToolErrorContent(
+      `this deck has a design reference (${references.join(', ')}): a stock look would ignore it. Look at the reference (view_image or viewSlide), then build its look with setCustomLook. Pass ignoreReference: true only if the person asked for the ${id} look.`,
+    )
+  }
   const look = deckLook(id)
   return landed(context.setLook(id, editOptions(args)), {
     look: look.id,

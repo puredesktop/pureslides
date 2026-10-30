@@ -64,8 +64,69 @@ function slideElements(doc: Document): Element[] {
   return [...root.children].filter(child => child.matches(SLIDE_SELECTOR))
 }
 
+const BLOCK_TAGS = new Set(['ADDRESS', 'BLOCKQUOTE', 'DD', 'DIV', 'DL', 'DT', 'FIGCAPTION', 'FIGURE', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'OL', 'P', 'PRE', 'SECTION', 'TABLE', 'TD', 'TH', 'TR', 'UL'])
+const BLOCK_DISPLAY = /(?:^|;)\s*display\s*:\s*(block|flex|grid|list-item|table)/i
+
+/**
+ * The words of an element as a person reads them.
+ *
+ * textContent drops line breaks: "Your server.<br>Your control." comes back
+ * as "server.Your", and a headline whose second line is its own block (a
+ * span set to display: block in a second colour) runs into the first. A
+ * `<br>` and every block boundary are a space here; an inline span inside a
+ * word (pure<span>.</span>science) is not.
+ */
+export function wordsOf(element: Element | null): string {
+  if (!element) return ''
+  const clone = element.cloneNode(true) as Element
+  clone.querySelectorAll('style, script').forEach(node => node.remove())
+  clone.querySelectorAll('br').forEach(node => node.replaceWith(' '))
+  clone.querySelectorAll('*').forEach(node => {
+    if (BLOCK_TAGS.has(node.tagName) || BLOCK_DISPLAY.test(node.getAttribute('style') ?? '')) {
+      node.before(' ')
+      node.after(' ')
+    }
+  })
+  return (clone.textContent ?? '').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Retype a headline set over several lines with `<br>` and keep its breaks
+ * where the words either side of each are still there: changing "Your
+ * server.<br>Your control." to "Your own server.<br>Your control." keeps the
+ * second line. A headline built of other elements is retyped whole.
+ */
+export function retypeKeepingBreaks(heading: Element, text: string): void {
+  const plain = [...heading.childNodes].every(node => node.nodeType === 3 || (node as Element).tagName === 'BR')
+  const lines = plain
+    ? heading.innerHTML.split(/<br\s*\/?>/i).map(line => line.replace(/&nbsp;/g, ' ').replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim())
+    : []
+  if (lines.length < 2) {
+    heading.textContent = text
+    return
+  }
+  const doc = heading.ownerDocument
+  let rest = text.replace(/\s+/g, ' ').trim()
+  const out: string[] = []
+  for (let i = 0; i < lines.length - 1; i += 1) {
+    const before = lines[i].split(' ').at(-1) ?? ''
+    const after = lines[i + 1].split(' ')[0] ?? ''
+    const seam = before && after ? rest.indexOf(`${before} ${after}`) : -1
+    if (seam < 0) continue
+    const cut = seam + before.length
+    out.push(rest.slice(0, cut))
+    rest = rest.slice(cut + 1)
+  }
+  out.push(rest)
+  heading.textContent = ''
+  out.forEach((line, i) => {
+    if (i) heading.appendChild(doc.createElement('br'))
+    heading.appendChild(doc.createTextNode(line))
+  })
+}
+
 function textOf(element: Element | null): string {
-  return (element?.textContent ?? '').replace(/\s+/g, ' ').trim()
+  return wordsOf(element)
 }
 
 /**
@@ -270,7 +331,8 @@ export function setSlideContent(
 
   if (patch.headline !== undefined) {
     const heading = slide.querySelector('h1, h2, h3, [data-headline]')
-    if (heading) heading.textContent = patch.headline
+    if (heading && wordsOf(heading) !== patch.headline.replace(/\s+/g, ' ').trim())
+      retypeKeepingBreaks(heading, patch.headline)
   }
   if (patch.support !== undefined) {
     const support = slide.querySelector('[data-support], p, .subtitle')
@@ -472,7 +534,7 @@ export function readElement(
   const isImage = element.tagName === 'IMG'
   return {
     tag: element.tagName.toLowerCase(),
-    text: (element.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    text: wordsOf(element),
     src: isImage ? (element.getAttribute('src') ?? '') : '',
     // No element children, and it is not a void element pretending to be text.
     editableText: !isImage && element.children.length === 0,

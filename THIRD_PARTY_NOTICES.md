@@ -28,6 +28,11 @@ Open Font License 1.1; the licence and copyright lines are in
 `src/fonts/licenses/`. Newsreader Display is Newsreader's variable font pinned
 at its display optical size (opsz 72) with fontTools; it keeps the OFL.
 
+A custom look made from an organisation's brand may also carry that brand's
+own woff2 files. They are copied into the deck package's `assets/fonts/brand/`
+from the brand folder beside its `.designsystem.json`, under whatever licence
+the brand file names; the app ships none of them.
+
 | Family | Upstream | Licence |
 | --- | --- | --- |
 | Inter | [rsms/inter](https://github.com/rsms/inter) | OFL-1.1 |
@@ -38,3 +43,9 @@ at its display optical size (opsz 72) with fontTools; it keeps the OFL.
 | Archivo | [Omnibus-Type/Archivo](https://github.com/Omnibus-Type/Archivo) | OFL-1.1 |
 | Instrument Serif, Instrument Sans | [Instrument](https://github.com/Instrument) | OFL-1.1 |
 | Atkinson Hyperlegible Next | [googlefonts/atkinson-hyperlegible-next](https://github.com/googlefonts/atkinson-hyperlegible-next) | OFL-1.1 |
+| Montserrat | [JulietaUla/Montserrat](https://github.com/JulietaUla/Montserrat) | OFL-1.1 |
+| Manrope | [sharanda/manrope](https://github.com/sharanda/manrope) | OFL-1.1 |
+| DM Sans, DM Mono | [googlefonts/dm-fonts](https://github.com/googlefonts/dm-fonts), [googlefonts/dm-mono](https://github.com/googlefonts/dm-mono) | OFL-1.1 |
+| Plus Jakarta Sans | [tokotype/PlusJakartaSans](https://github.com/tokotype/PlusJakartaSans) | OFL-1.1 |
+| Poppins | [itfoundry/Poppins](https://github.com/itfoundry/Poppins) | OFL-1.1 |
+| JetBrains Mono | [JetBrains/JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) | OFL-1.1 |

@@ -27,6 +27,8 @@ export interface BundledFamily {
   faces: BundledFace[]
   source: string
   licence: 'OFL-1.1'
+  /** What the face is like, for matching a brand's type to the closest bundled face. */
+  kind?: string
 }
 
 export const FONT_DIR = 'fonts'
@@ -123,6 +125,70 @@ export const BUNDLED_FAMILIES: BundledFamily[] = [
     ],
     source: 'https://www.npmjs.com/package/@fontsource/atkinson-hyperlegible-next/v/5.3.0',
     licence: 'OFL-1.1',
+  },
+  {
+    family: 'Montserrat',
+    generic: 'sans-serif',
+    faces: [{ file: 'montserrat.woff2', style: 'normal', weight: '100 900' }],
+    source: 'https://www.npmjs.com/package/@fontsource-variable/montserrat/v/5.3.0',
+    licence: 'OFL-1.1',
+    kind: 'geometric sans: wide, round bowls, double-storey a; brand wordmarks, navigation and headlines',
+  },
+  {
+    family: 'Manrope',
+    generic: 'sans-serif',
+    faces: [{ file: 'manrope.woff2', style: 'normal', weight: '200 800' }],
+    source: 'https://www.npmjs.com/package/@fontsource-variable/manrope/v/5.3.0',
+    licence: 'OFL-1.1',
+    kind: 'geometric-grotesque sans: semi-condensed, modern tech and product brands',
+  },
+  {
+    family: 'DM Sans',
+    generic: 'sans-serif',
+    faces: [{ file: 'dm-sans.woff2', style: 'normal', weight: '100 1000' }],
+    source: 'https://www.npmjs.com/package/@fontsource-variable/dm-sans/v/5.3.0',
+    licence: 'OFL-1.1',
+    kind: 'low-contrast geometric sans: friendly, compact, start-up and SaaS sites',
+  },
+  {
+    family: 'Plus Jakarta Sans',
+    generic: 'sans-serif',
+    faces: [{ file: 'plus-jakarta-sans.woff2', style: 'normal', weight: '200 800' }],
+    source: 'https://www.npmjs.com/package/@fontsource-variable/plus-jakarta-sans/v/5.3.0',
+    licence: 'OFL-1.1',
+    kind: 'geometric sans with open apertures: contemporary product and agency brands',
+  },
+  {
+    family: 'Poppins',
+    generic: 'sans-serif',
+    faces: [
+      { file: 'poppins-400.woff2', style: 'normal', weight: '400' },
+      { file: 'poppins-600.woff2', style: 'normal', weight: '600' },
+      { file: 'poppins-700.woff2', style: 'normal', weight: '700' },
+      { file: 'poppins-800.woff2', style: 'normal', weight: '800' },
+    ],
+    source: 'https://www.npmjs.com/package/@fontsource/poppins/v/5.3.0',
+    licence: 'OFL-1.1',
+    kind: 'pure geometric sans: circular o, single-storey a; Futura-like brands',
+  },
+  {
+    family: 'JetBrains Mono',
+    generic: 'monospace',
+    faces: [{ file: 'jetbrains-mono.woff2', style: 'normal', weight: '100 800' }],
+    source: 'https://www.npmjs.com/package/@fontsource-variable/jetbrains-mono/v/5.3.0',
+    licence: 'OFL-1.1',
+    kind: 'monospace: tall x-height, developer and research brands, // tags',
+  },
+  {
+    family: 'DM Mono',
+    generic: 'monospace',
+    faces: [
+      { file: 'dm-mono-400.woff2', style: 'normal', weight: '400' },
+      { file: 'dm-mono-500.woff2', style: 'normal', weight: '500' },
+    ],
+    source: 'https://www.npmjs.com/package/@fontsource/dm-mono/v/5.3.0',
+    licence: 'OFL-1.1',
+    kind: 'soft monospace: labels and captions beside a geometric sans',
   },
 ]
 

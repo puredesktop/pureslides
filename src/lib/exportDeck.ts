@@ -422,6 +422,52 @@ export async function frameToDeck(
   return (await cropDataUrl(dataUrl, { x: 0, y: 0, w: 1, h: keep }).catch(() => undefined)) ?? dataUrl
 }
 
+/**
+ * One slide as the renderers draw it, at its last step: what the agent looks
+ * at to compare its slide with a reference. Not an export — nothing is
+ * verified or kept; the frame is scaffolding inside the package and goes.
+ */
+export async function renderSlidePicture(
+  packagePath: string,
+  html: string,
+  index: number,
+  step: number,
+): Promise<{ dataUrl: string; width: number; height: number }> {
+  const root = packagePath.replace(/\/+$/, '')
+  const geometry = geometryFromHtml(html)
+  const framePath = `${root}/.look-frame.html`
+  const dirName = '.look-frames'
+  const framesDir = `${root}/${dirName}`
+  try {
+    await createFolder(root, dirName)
+  } catch {
+    /* already there */
+  }
+  try {
+    await writeTextFile(framePath, shownSlideHtml(html, 0, 0))
+    const captured = await captureFrames({
+      htmlPath: framePath,
+      outputDir: framesDir,
+      times: [index + step / 1000],
+      namePattern: 'frame-{i}.png',
+      width: geometry.width,
+      loadingMessage: `Looking at slide ${index + 1}`,
+    })
+    const raw = await readBinaryDataUrl(`${framesDir}/${frameFileName(0)}`)
+    const dataUrl = await frameToDeck(raw, captured, geometry)
+    const size = deckFrameSize(captured, geometry)
+    return { dataUrl, width: size.width, height: size.height }
+  } finally {
+    for (const [path, recursive] of [[framePath, false], [framesDir, true]] as const) {
+      try {
+        await deletePath(path, recursive)
+      } catch {
+        /* nothing to clean up */
+      }
+    }
+  }
+}
+
 export async function exportDeck(request: ExportRequest): Promise<ExportResult> {
   const { html, slides, documentPath, title, kind, onProgress, shouldCancel } =
     request

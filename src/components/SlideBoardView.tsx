@@ -19,6 +19,7 @@ import { createDefaultDeckDocument } from '../lib/deckDocument'
 import { clearSlides, addSlide } from '../lib/slides'
 import { withDeckLook } from '../lib/deckLooks'
 import { LookPicker } from './LookPicker'
+import { customLookFromHtml } from '../lib/customLook'
 import { containDialogFocus } from './dialogFocus'
 import type { BoardTab, DeckGeometry, PickedElement } from '../types'
 import type { MaterialItem } from '../lib/material'
@@ -600,7 +601,7 @@ export function SlideBoardView({
           {inspector === 'design' ? <DesignSection>
             <DesignTitle>Set the tone.</DesignTitle>
             <DesignNote>A coordinated palette and type pairing for your presentation.</DesignNote>
-            {onLook ? <LookPicker value={look} onChange={onLook} /> : null}
+            {onLook ? <LookPicker value={look} onChange={onLook} custom={look === 'custom' ? customLookFromHtml(html) : null} /> : null}
             <DesignNote>Updates layouts using presentation styles. Custom colors and fonts stay as authored.</DesignNote>
           </DesignSection> : <>
           <Ops>

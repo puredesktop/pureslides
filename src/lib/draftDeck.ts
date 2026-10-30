@@ -1,3 +1,4 @@
+import { customLookFromHtml, customLookTokens } from './customLook'
 import { deckLook, lookDeclarations } from './deckLooks'
 import type { MaterialItem } from './material'
 
@@ -118,8 +119,11 @@ filename is not an image source. Files marked [content] or [logo] are the
 opposite: you SEE them so you can design with them, and you PLACE them with
 <img src="assets/<file name>">. With no reference attached, read the look off
 the content and logo images instead — their colours and character are what
-the deck should feel like. If you can see no images at all, design one
-consistent look of your own and say nothing about it either way.`
+the deck should feel like. When the files are only named here and not shown,
+look at each one first with view_image (its absolute path in the package's
+assets) — a reference you have not seen is not a reference. A deck with a
+reference wears a custom look built from it (setCustomLook), never a stock
+one.`
 
 export interface ReferenceImage {
   name: string
@@ -277,6 +281,26 @@ function inventoryOf(material: MaterialItem[]): string {
     .join('\n')
 }
 
-export function deckDesignGuide(look='auto'):string {
+const CUSTOM_LOOK = `LOOK — the organisation's own look, made from its reference image or
+saved brand and already set as --slide-* tokens on the deck root. Keep every
+token exactly as it is and write every slide with them: --slide-heading-font at
+--slide-heading-weight for headlines, --slide-accent-2 for a headline's
+second-colour line (a <span style="display: block; color:
+var(--slide-accent-2)">), --slide-label-font and --slide-highlight for small
+tracked tags and kickers, --slide-radius on cards and buttons, --slide-accent
+for the one primary action. The brand's motif (generated art) sits behind the
+slides from the deck's stylesheet: keep slide grounds as var(--slide-bg) so it
+shows, keep text in its quiet areas, and put data-motif="none" on a slide that
+must stand clear. Never draw imitations of the motif with CSS shapes or SVG.
+Do not reintroduce a stock palette or face.`
+
+export function deckDesignGuide(look='auto', html?: string):string {
+  if (look === 'custom' && html) {
+    const spec = customLookFromHtml(html)
+    if (spec) {
+      const tokens = Object.entries(customLookTokens(spec)).map(([key, value]) => `--slide-${key}: ${value}`).join('; ')
+      return `Compose the complete deck HTML for commitDrawerRequest, not the example JSON response shape.\n${SYSTEM}\n${CUSTOM_LOOK}\nCustom look ${spec.name}: these tokens are on the deck root; keep them: ${tokens};\n${REFERENCE_RULE}\nReturn complete deck HTML to commitDrawerRequest, preserving existing content unless replacement was requested.`
+    }
+  }
   return `Compose the complete deck HTML for commitDrawerRequest, not the example JSON response shape.\n${SYSTEM}\n${LOOKS[look]??LOOKS.auto}\nPreset ${deckLook(look).label}: set these tokens on the deck root unless a design reference supplies its own: ${lookDeclarations(look)}\n${REFERENCE_RULE}\nReturn complete deck HTML to commitDrawerRequest, preserving existing content unless replacement was requested.`
 }
