@@ -24,6 +24,7 @@ import {
   nearestBundled,
   parseBrand,
 } from '../lib/brand'
+import { brandPathProblem, readBrandArgument } from '../lib/houseStyle'
 import {
   contrastNotes,
   customLook,
@@ -79,6 +80,65 @@ function packageAsset(name: string): string {
   return clean.startsWith('assets/') ? clean : `assets/${clean}`
 }
 
+/** What a brand brings to the deck: the look's starting tokens, and the files it copied into the package. */
+export interface BroughtBrand {
+  input: CustomLookInput
+  notes: string[]
+  brought: string[]
+  motifIdeas: { name: string; description: string }[]
+}
+
+/**
+ * Read a brand file, bring its fonts, motif art and logos into the deck's
+ * package, and answer the look it describes (not yet on the deck). Used by
+ * setCustomLook, by createDeck and by a new deck starting in the house style.
+ */
+export async function bringBrand(context: DeckAgentToolContext, brandPath: string): Promise<BroughtBrand> {
+  const brand = parseBrand(await context.files.readText(brandPath))
+  const look = lookFromBrand(brand, brandPath)
+  const brought: string[] = []
+  for (const copy of look.copies) {
+    const read = await context.files.readBase64(copy.from, 8 * 1024 * 1024)
+    await context.writePackageFile(copy.to, read.base64)
+    brought.push(copy.to)
+  }
+  if (look.motif) {
+    const read = await context.files.readBase64(look.motif.from, 16 * 1024 * 1024)
+    await context.writePackageFile(look.motif.to, read.base64)
+    brought.push(look.motif.to)
+  }
+  for (const logo of look.logos) {
+    const reference = await context.addAsset(logo.from, logo.name)
+    context.setAssetRole(reference.replace(/^assets\//, ''), 'logo')
+    brought.push(reference)
+  }
+  return { input: look.input, notes: [...look.notes], brought, motifIdeas: look.motifIdeas }
+}
+
+/**
+ * The brand file a `brand` argument names: an absolute .designsystem.json
+ * path as it is, or an id from listBrands looked up through the shell.
+ * Answers the words of a refusal when it names nothing usable.
+ */
+export async function resolveBrandPath(
+  context: DeckAgentToolContext,
+  value: string,
+): Promise<{ path: string; name?: string; samples?: string[] } | { error: string }> {
+  const arg = readBrandArgument(value)
+  if (!arg || arg.kind === 'none') return { error: 'brand must be an id from listBrands or the absolute path of a .designsystem.json file' }
+  if (arg.kind === 'path') {
+    const problem = brandPathProblem(arg.path)
+    return problem ? { error: problem } : { path: arg.path }
+  }
+  if (!context.brands) return { error: `"${arg.id}" is not a path, and this desktop does not list brands: give the absolute path of a .designsystem.json file` }
+  try {
+    const detail = await context.brands.get(arg.id)
+    return { path: detail.path, name: detail.name, samples: detail.samples }
+  } catch (error) {
+    return { error: `there is no brand "${arg.id}" (call listBrands for the ids): ${error instanceof Error ? error.message : String(error)}` }
+  }
+}
+
 /**
  * Build the custom look from a brand file, explicit tokens, or both
  * (explicit wins), bring the brand's files into the package, and put it on
@@ -90,33 +150,20 @@ export async function setCustomLookHandler(
 ): Promise<AgentToolHandlerResult> {
   if (!context.documentPath) return agentToolErrorContent('there is no deck open — create one first')
   const notes: string[] = []
-  const brought: string[] = []
+  let brought: string[] = []
   let base: CustomLookInput = {}
-  const brandPath = str(args.brand)
+  const brandArg = str(args.brand)
   let motifIdeas: { name: string; description: string }[] = []
+  let brandName: string | undefined
   try {
-    if (brandPath) {
-      if (!brandPath.startsWith('/')) return agentToolErrorContent('brand must be the absolute path of a .designsystem.json file')
-      if (!brandPath.endsWith(DESIGN_SYSTEM_SUFFIX)) return agentToolErrorContent(`brand must be a ${DESIGN_SYSTEM_SUFFIX} file`)
-      const brand = parseBrand(await context.files.readText(brandPath))
-      const look = lookFromBrand(brand, brandPath)
+    if (brandArg) {
+      const resolved = await resolveBrandPath(context, brandArg)
+      if ('error' in resolved) return agentToolErrorContent(resolved.error)
+      brandName = resolved.name
+      const look = await bringBrand(context, resolved.path)
       notes.push(...look.notes)
       motifIdeas = look.motifIdeas
-      for (const copy of look.copies) {
-        const read = await context.files.readBase64(copy.from, 8 * 1024 * 1024)
-        await context.writePackageFile(copy.to, read.base64)
-        brought.push(copy.to)
-      }
-      if (look.motif) {
-        const read = await context.files.readBase64(look.motif.from, 16 * 1024 * 1024)
-        await context.writePackageFile(look.motif.to, read.base64)
-        brought.push(look.motif.to)
-      }
-      for (const logo of look.logos) {
-        const reference = await context.addAsset(logo.from, logo.name)
-        context.setAssetRole(reference.replace(/^assets\//, ''), 'logo')
-        brought.push(reference)
-      }
+      brought = look.brought
       base = look.input
     } else {
       // Building on the look already there: a second call adjusts it rather than starting over.
@@ -190,6 +237,7 @@ export async function setCustomLookHandler(
         radius: spec.radius,
         motif: spec.motif ?? null,
         brandFaces: spec.faces.map(f => `${f.family} ${f.weight}${f.style === 'italic' ? ' italic' : ''}`),
+        ...(brandName ? { brand: brandName } : {}),
         ...(brought.length ? { brought } : {}),
         ...(notes.length ? { notes } : {}),
         ...(motifIdeas.length
@@ -347,52 +395,93 @@ export async function viewSlideHandler(
   }
 }
 
+export interface SaveLookOptions {
+  path: string
+  id?: string
+  guidelines?: string[]
+  voice?: string[]
+  motifName?: string
+  motifDescription?: string
+  logosOnDark?: boolean
+  /** More sample images for the brand's references (absolute paths inside the deck's package, e.g. exported slides). */
+  extraReferences?: string[]
+}
+
+/**
+ * Write the deck's custom look as a brand file with its folder beside it,
+ * and remember it as the brand saved from this deck. Throws the words to
+ * show when it cannot.
+ */
+export async function saveDeckLookAsBrand(
+  context: DeckAgentToolContext,
+  options: SaveLookOptions,
+): Promise<{ saved: string; files: string[] }> {
+  if (!context.documentPath) throw new BrandError('there is no deck open')
+  const spec = customLookFromHtml(context.document.html)
+  if (!spec) throw new BrandError('the deck has a stock look; make a custom look first (setCustomLook)')
+  const { path } = options
+  if (!path || !path.startsWith('/') || !path.endsWith(DESIGN_SYSTEM_SUFFIX))
+    throw new BrandError(`path must be the absolute path of the brand file to write, ending in ${DESIGN_SYSTEM_SUFFIX}`)
+  const pkg = context.documentPath.replace(/\/+$/, '')
+  const logos = context.material.filter(item => item.role === 'logo').map(item => ({ file: `assets/${item.name}`, onDark: Boolean(options.logosOnDark) }))
+  const references = [
+    ...context.material.filter(item => item.role === 'reference').map(item => ({ file: `assets/${item.name}`, ...(item.description ? { note: item.description } : {}) })),
+    ...(options.extraReferences ?? [])
+      .filter(file => file.startsWith(`${pkg}/`))
+      .map(file => ({ file: file.slice(pkg.length + 1), note: 'A slide from a deck in this look.' })),
+  ]
+  const motifDescription = options.motifDescription
+  const motifs = spec.motif
+    ? [{ name: options.motifName ?? 'Motif', description: motifDescription ?? 'The brand’s background art, generated from its reference.', file: spec.motif.file }]
+    : motifDescription
+      ? [{ name: options.motifName ?? 'Motif', description: motifDescription }]
+      : []
+  const { json, copies } = brandFromLook({
+    spec,
+    path,
+    ...(options.id ? { id: options.id } : {}),
+    ...(options.guidelines ? { guidelines: options.guidelines } : {}),
+    ...(options.voice ? { voice: options.voice } : {}),
+    logos,
+    references,
+    motifs,
+  })
+  const folder = path.replace(/\/[^/]*$/, '')
+  for (const copy of copies) {
+    const target = `${folder}/${copy.to}`
+    await context.files.ensureFolder(target.replace(/\/[^/]*$/, ''))
+    const bundled = BUNDLED_FONT_URLS[copy.from.replace(/^assets\//, '')]
+    const base64 = bundled ? bundled.replace(/^data:[^,]*,/, '') : (await context.files.readBase64(`${pkg}/${copy.from}`, 16 * 1024 * 1024)).base64
+    await context.files.writeBase64(target, base64)
+  }
+  await context.files.writeText(path, json)
+  context.rememberSavedBrand?.(path)
+  return { saved: path, files: copies.map(copy => copy.to) }
+}
+
 /** Write the deck's custom look back as a brand other apps (Canvas, PureSite, PureDesign) read. */
 export async function saveLookAsBrandHandler(
   context: DeckAgentToolContext,
   args: Record<string, unknown>,
 ): Promise<AgentToolHandlerResult> {
-  if (!context.documentPath) return agentToolErrorContent('there is no deck open')
-  const spec = customLookFromHtml(context.document.html)
-  if (!spec) return agentToolErrorContent('the deck has a stock look; make a custom look first (setCustomLook)')
-  const path = str(args.path)
-  if (!path || !path.startsWith('/') || !path.endsWith(DESIGN_SYSTEM_SUFFIX))
-    return agentToolErrorContent(`path must be the absolute path of the brand file to write, ending in ${DESIGN_SYSTEM_SUFFIX}`)
   const list = (value: unknown) => (Array.isArray(value) ? value.map(str).filter((v): v is string => Boolean(v)) : undefined)
-  const motifDescription = str(args.motifDescription)
-  const pkg = context.documentPath.replace(/\/+$/, '')
-  const logos = context.material.filter(item => item.role === 'logo').map(item => ({ file: `assets/${item.name}`, onDark: Boolean(args.logosOnDark) }))
-  const references = context.material.filter(item => item.role === 'reference').map(item => ({ file: `assets/${item.name}`, ...(item.description ? { note: item.description } : {}) }))
-  const motifs = spec.motif
-    ? [{ name: str(args.motifName) ?? 'Motif', description: motifDescription ?? 'The brand’s background art, generated from its reference.', file: spec.motif.file }]
-    : motifDescription
-      ? [{ name: str(args.motifName) ?? 'Motif', description: motifDescription }]
-      : []
   try {
-    const { json, copies } = brandFromLook({
-      spec,
-      path,
+    const result = await saveDeckLookAsBrand(context, {
+      path: str(args.path) ?? '',
       ...(str(args.id) ? { id: str(args.id) } : {}),
       ...(list(args.guidelines) ? { guidelines: list(args.guidelines) } : {}),
       ...(list(args.voice) ? { voice: list(args.voice) } : {}),
-      logos,
-      references,
-      motifs,
+      ...(str(args.motifName) ? { motifName: str(args.motifName) } : {}),
+      ...(str(args.motifDescription) ? { motifDescription: str(args.motifDescription) } : {}),
+      logosOnDark: Boolean(args.logosOnDark),
     })
-    const folder = path.replace(/\/[^/]*$/, '')
-    for (const copy of copies) {
-      const target = `${folder}/${copy.to}`
-      await context.files.ensureFolder(target.replace(/\/[^/]*$/, ''))
-      const bundled = BUNDLED_FONT_URLS[copy.from.replace(/^assets\//, '')]
-      const base64 = bundled ? bundled.replace(/^data:[^,]*,/, '') : (await context.files.readBase64(`${pkg}/${copy.from}`, 16 * 1024 * 1024)).base64
-      await context.files.writeBase64(target, base64)
-    }
-    await context.files.writeText(path, json)
     return {
       content: formatAgentToolJson({
-        saved: path,
-        files: copies.map(copy => copy.to),
+        ...result,
         note: 'Saved in the shared brand format (pure-design-system v1 with fonts, logos, motifs and references beside it). Canvas, PureSite and PureDesign read it; PureSlides reads it back with setCustomLook brand.',
+        ...(context.brands
+          ? { propose: 'To offer it to the organisation as a house style, call proposeBrandToOrganisation (no brand argument proposes this saved brand). It needs at least one reference image.' }
+          : {}),
       }),
     }
   } catch (error) {

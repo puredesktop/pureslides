@@ -164,3 +164,65 @@ export async function recordOperation(
   if (isStandaloneDevMode()) return null
   return recordPlatformOperationBridge(input)
 }
+
+// ---- Brands ----------------------------------------------------------------
+// The organisation's house style and the person's own brands, from the
+// shell (filesystem permission). On an older shell or PureCloud the shell
+// does not offer them: `brandsOffered()` is false and the app keeps working
+// from brand file paths alone.
+import {
+  brandsOffered as brandsOfferedBridge,
+  defaultBrand as defaultBrandBridge,
+  getBrand as getBrandBridge,
+  listBrands as listBrandsBridge,
+  onBrandsChanged as onBrandsChangedBridge,
+  proposeBrand as proposeBrandBridge,
+  proposeBrandSamples as proposeBrandSamplesBridge,
+} from '@purescience/platform-ui/bridge/brands.mjs'
+import type {
+  BrandDetail,
+  BrandEntry,
+  BrandProposalAnswer,
+} from '@purescience/platform-ui/bridge/brands.mjs'
+
+export type { BrandDetail, BrandEntry, BrandProposalAnswer }
+
+export function brandsOffered(): boolean {
+  if (isStandaloneDevMode()) return false
+  return brandsOfferedBridge()
+}
+
+export async function listBrands(): Promise<BrandEntry[]> {
+  return listBrandsBridge()
+}
+
+export async function getBrand(id: string): Promise<BrandDetail> {
+  return getBrandBridge(id)
+}
+
+/** The organisation's default brand, or null when there is no organisation or no house style. */
+export async function defaultBrand(): Promise<BrandDetail | null> {
+  if (!brandsOffered()) return null
+  return defaultBrandBridge()
+}
+
+export async function proposeBrand(input: {
+  id?: string
+  path?: string
+  note?: string
+}): Promise<BrandProposalAnswer> {
+  return proposeBrandBridge(input)
+}
+
+export async function proposeBrandSamples(input: {
+  brand?: string
+  images: string[]
+  note?: string
+}): Promise<BrandProposalAnswer> {
+  return proposeBrandSamplesBridge(input)
+}
+
+export function onBrandsChanged(listener: () => void): () => void {
+  if (!brandsOffered()) return () => {}
+  return onBrandsChangedBridge(listener)
+}

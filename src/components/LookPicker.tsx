@@ -6,11 +6,11 @@ import { familyStack } from '../fonts/registry'
 import type { CustomLookSpec } from '../lib/customLook'
 
 /** A custom look drawn as a tile like the stock ones: the deck's own, chosen by its agent from a reference or brand. */
-function customTile(spec: CustomLookSpec) {
+function customTile(spec: CustomLookSpec, note: string) {
   return {
     id: 'custom',
     label: spec.name,
-    note: 'Your organisation’s look',
+    note,
     bg: spec.colors.bg,
     ink: spec.colors.ink,
     accent: spec.colors.accent,
@@ -28,18 +28,21 @@ export function LookPicker({
   onChange,
   disabled = false,
   custom = null,
+  houseStyle = false,
 }: {
   value: string
   onChange: (value: string) => void
   disabled?: boolean
   /** The deck's custom look, shown first when it wears one. */
   custom?: CustomLookSpec | null
+  /** The custom look is the organisation's house style. */
+  houseStyle?: boolean
 }) {
   // The samples are set in the faces the decks get.
   installAppFonts()
   return (
     <Choices role="group" aria-label="Presentation style">
-      {[...(custom ? [customTile(custom)] : []), ...DECK_LOOKS].map(look => (
+      {[...(custom ? [customTile(custom, houseStyle ? 'Your organisation’s house style' : 'Your organisation’s look')] : []), ...DECK_LOOKS].map(look => (
         <Choice
           key={look.id}
           type="button"

@@ -120,6 +120,36 @@ a claim from the brief or remove it (see "The words come from the brief"). For h
 deck, and for the final visual review, read the **Slide typography and
 design** skill.
 
+## The organisation's house style comes first
+
+On a desktop in an organisation, the organisation has a default brand, its
+house style (`listBrands` marks it `default: true`; `getDeckContext` reports
+it as `houseStyle`). A new deck starts in it:
+
+- `createDeck` with no `brand` puts the house style on the new deck (its
+  colours, faces, logos and motif) and its reply names it and lists its
+  `samples`. Do not pass `brand` unless the person named one; `brand:
+  "none"` is only for a person who asked for a stock look.
+- **Look at the samples first.** `view_image` each sample path before you
+  write a slide: they show the brand in use, which tokens alone do not.
+- **Keep it.** Do not call `setLook` on a deck in the house style: it refuses
+  unless `ignoreHouseStyle: true`, which is only for a person who asked for
+  that stock look.
+- **The person's reference still wins.** A reference image or a brand the
+  person gives replaces the house style: `setCustomLook` from it, as below.
+- **Say which brand you used** in your reply: "In pure.science, your
+  organisation's house style", or the brand the person chose.
+- `setCustomLook` `brand` takes an id from `listBrands` as well as a path.
+- **Proposing to the organisation.** `proposeBrandToOrganisation` sends a
+  saved brand (an id or path; with neither, the brand saved from this deck,
+  saved now if it never was) for an administrator to approve; a house style
+  needs at least one sample image. `proposeSamplesToOrganisation` sends this
+  deck's slides (exported as pictures, up to 12, or the `slides` you name) or
+  `images` you name as examples of the house style. Both are refused in plain
+  words when the desktop is not in an organisation; pass the reply's
+  `message` on to the person. The person has the same action under Design ›
+  "Propose to organisation…".
+
 ## An organisation's own look — from a reference or a brand
 
 When the person gives a reference image (their website, a brochure, a
@@ -253,7 +283,9 @@ Not "write eight slides by hand". The author's path is:
    FROM, and an undescribed file is skipped rather than used badly.
 2. `setBrief` with what the deck is for and roughly how many slides, and
    the look: `setCustomLook` (and `makeMotif`) when there is a reference or a
-   brand, otherwise `setLook` with the stock look that suits the room.
+   brand; a deck already in the organisation's house style keeps it (look
+   at its samples first); otherwise `setLook` with the stock look that suits
+   the room.
 3. `draftDeck`.
 
 `draftDeck` now PREPARES a durable request and returns immediately. It never
@@ -361,6 +393,10 @@ carrying the content forward.
 | See the bundled faces | `listLookFonts` |
 | Look at a slide beside the reference | `viewSlide` |
 | Keep the look for other apps | `saveLookAsBrand` |
+| See the brands, the house style marked | `listBrands` |
+| Start a deck (in the house style unless told otherwise) | `createDeck` → `view_image` its `samples` |
+| Offer a brand to the organisation | `proposeBrandToOrganisation` |
+| Offer this deck's slides as house-style examples | `proposeSamplesToOrganisation` |
 | Put a clip on a slide | `addAsset` → `addBlock` (`video-full` or `video`, with `asset`) |
 | Remove one element | `getDeckContext` → `deleteElement` |
 | Make something arrive on a press | `setElementStep` |

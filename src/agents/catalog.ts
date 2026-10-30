@@ -15,6 +15,22 @@ import type { Slide, SlideEdit } from '../lib/slides'
 import type { AssetRole } from '../lib/assetNotes'
 import type { ExportKind } from '../lib/exportDeck'
 import type { CustomLookSpec } from '../lib/customLook'
+import type { HouseStyle } from '../lib/houseStyle'
+import type {
+  BrandDetail,
+  BrandEntry,
+  BrandProposalAnswer,
+} from '@purescience/platform-ui/bridge/brands.mjs'
+
+/** The shell's brands: the organisation's house style, the workspace's and the person's own. */
+export interface DeckBrandAccess {
+  list: () => Promise<BrandEntry[]>
+  get: (id: string) => Promise<BrandDetail>
+  /** The organisation's default brand, or null. */
+  default: () => Promise<BrandDetail | null>
+  propose: (input: { id?: string; path?: string; note?: string }) => Promise<BrandProposalAnswer>
+  proposeSamples: (input: { brand?: string; images: string[]; note?: string }) => Promise<BrandProposalAnswer>
+}
 
 /** Files outside the deck: a brand file and its folder. Absolute paths. */
 export interface DeckFileAccess {
@@ -69,6 +85,9 @@ export const PURESLIDES_AGENT_TOOLS = [
   'setCustomLook',
   'makeMotif',
   'saveLookAsBrand',
+  'listBrands',
+  'proposeBrandToOrganisation',
+  'proposeSamplesToOrganisation',
   'viewSlide',
   'draftDeck',
   'getDrawerRequest',
@@ -143,6 +162,15 @@ export interface DeckAgentToolContext {
   /** Put a custom look (an organisation's own) on the deck, through the same door. */
   setCustomLook: (spec: CustomLookSpec, options?: EditOptions) => DeckEditResult
   files: DeckFileAccess
+  /** The shell's brands; null on a shell (or PureCloud) that does not offer them. */
+  brands: DeckBrandAccess | null
+  /** The organisation's default brand as last read; null when there is none. */
+  houseStyle: HouseStyle | null
+  /** The brand file last saved from this deck (saveLookAsBrand), or null. */
+  savedBrandPath: string | null
+  rememberSavedBrand?: (path: string) => void
+  /** Every slide as a PNG through the images export (refused unless the layout is verified); absolute paths. */
+  exportSlideImages: () => Promise<string[]>
   /** Write bytes into the open deck's package at `assets/…` (folders made as needed); returns the package path. */
   writePackageFile: (relative: string, base64: string) => Promise<string>
   /** The desktop's image model, or null when this desktop has none. */
