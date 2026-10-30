@@ -63,6 +63,16 @@ Rules for the markup:
   copied exactly. A file marked [logo] belongs small on the title and end
   slides; a content image earns a slide when it carries the argument.
 
+Copy (the suite's copy rule, "Copy comes from the brief"):
+- When the brief gives claims or copy, every headline, subhead, card and call
+  to action quotes a claim or restates it closely. Add no new facts, numbers,
+  customers or capabilities, and no slogans of your own.
+- Never reuse a reference's own headline or taglines unless the brief says to:
+  a reference is for the look, not the words.
+- No filler: every card or block carries a real claim, or it is removed. Never
+  a card holding only a label. A punchy cut of a claim is fine when it means
+  the same.
+
 Art direction:
 - Establish a strong opening, a visual rhythm, and a distinct closing. Avoid
   three consecutive slides with the same composition. Match layout to meaning.
