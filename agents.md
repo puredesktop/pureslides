@@ -321,8 +321,11 @@ refusal carries the current hash and says to re-read. Redo the edit
 against the deck as it is now; never retry blind. Every landed edit
 returns the new `hash`, which is the base for your next one.
 
-`baseHash` is optional for one release so older prompts keep working; a
-stale hash, when given, is refused all the same. There is one door for
+`baseHash` is required on every tool that writes against a slide index
+or replaces the deck (`setDeck`, the slide tools, the element tools,
+`addBlock`): without it the call is refused before it runs. A whole-deck
+rewrite built from an old read would otherwise put back a slide order
+the author has since changed. The look tools still accept it as optional. There is one door for
 every change — yours, the author's, the ask box's — so nothing you write
 can overwrite something you did not read.
 

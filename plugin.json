@@ -210,11 +210,12 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
-              "html"
+              "html",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -234,11 +235,12 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
-              "html"
+              "html",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -274,11 +276,12 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
-              "index"
+              "index",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -297,12 +300,13 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
               "index",
-              "html"
+              "html",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -321,12 +325,13 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
               "from",
-              "to"
+              "to",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -342,11 +347,12 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
-              "index"
+              "index",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -363,11 +369,12 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
-              "index"
+              "index",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -390,13 +397,14 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
               "slideIndex",
               "path",
-              "html"
+              "html",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -419,13 +427,14 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
               "slideIndex",
               "path",
-              "text"
+              "text",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -459,11 +468,12 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
-              "blockId"
+              "blockId",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -483,12 +493,13 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
               "slideIndex",
-              "path"
+              "path",
+              "baseHash"
             ]
           },
           "requiresApproval": true
@@ -511,13 +522,14 @@
               },
               "baseHash": {
                 "type": "string",
-                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Required."
               }
             },
             "required": [
               "slideIndex",
               "path",
-              "step"
+              "step",
+              "baseHash"
             ]
           },
           "requiresApproval": true

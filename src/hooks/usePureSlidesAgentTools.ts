@@ -75,6 +75,31 @@ const READ_ONLY_TOOLS = new Set([
   'stopExport',
 ])
 
+/**
+ * The tools that write against a slide index or replace the deck outright.
+ * A stale one does real harm — a rewrite read before the author moved a
+ * slide puts the old order back, an index lands on the slide that moved
+ * into its place — so these refuse to run without the hash they were read
+ * at, and the door refuses a hash that is no longer current.
+ */
+export const BASE_HASH_REQUIRED_TOOLS = new Set([
+  'setDeck',
+  'addSlide',
+  'updateSlide',
+  'setSlideHtml',
+  'moveSlide',
+  'duplicateSlide',
+  'deleteSlide',
+  'setElement',
+  'setElementText',
+  'addBlock',
+  'deleteElement',
+  'setElementStep',
+])
+
+export const MISSING_BASE_HASH_MESSAGE =
+  'baseHash is required: call getDeckContext (or getSlide / listSlides) and pass its hash, so this edit cannot undo changes made since your last read.'
+
 export function usePureSlidesAgentTools(
   ready: boolean,
   context: DeckAgentToolContext,
@@ -182,6 +207,11 @@ export function usePureSlidesAgentTools(
             throw new AgentDeckToolError(
               'Wait for the deck to finish opening, then read getDeckContext again before changing it.',
             )
+          if (BASE_HASH_REQUIRED_TOOLS.has(name)) {
+            const baseHash = invoke.arguments?.baseHash
+            if (typeof baseHash !== 'string' || !baseHash.trim())
+              throw new AgentDeckToolError(MISSING_BASE_HASH_MESSAGE)
+          }
           return handler(invoke)
         },
       ]),
