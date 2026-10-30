@@ -110,8 +110,9 @@ export type GeometryPatch = { width?: number; height?: number }
 
 /**
  * What every mutating tool may carry: the hash the agent read the deck at.
- * Optional for one release; when it is given and stale, the edit is refused
- * with the current hash and a re-read hint.
+ * Required on the slide, element and whole-deck tools (the hook refuses a
+ * call without it); optional on the look tools. When it is given and stale,
+ * the edit is refused with the current hash and a re-read hint.
  */
 import type { BlockFill } from '../lib/blocks'
 
