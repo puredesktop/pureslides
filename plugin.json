@@ -970,7 +970,7 @@
         {
           "name": "proposeBrandToOrganisation",
           "risk": "external",
-          "description": "Send a saved brand to the organisation's server for an administrator to approve as a house style. brand is an id from listBrands or the absolute path of a .designsystem.json; leave it out to propose the brand saved from this deck (saveLookAsBrand), which is saved now into the deck's package if it never was, with the deck's slides as its sample images when it has no reference. A house style needs at least one sample image. Refused when the desktop is not in an organisation. Optional note for the administrator. Tell the person the reply's message.",
+          "description": "Call getDeckContext first. Propose a saved brand to the organisation's server for an administrator to approve as a house style. brand is an id from listBrands or the absolute path of a .designsystem.json; leave it out to propose the brand saved from this deck (saveLookAsBrand), which is saved now into the deck's package if it never was, with the deck's slides as its sample images when it has no reference. A house style needs at least one sample image. Refused when the desktop is not in an organisation. Optional note for the administrator. Tell the person the reply's message.",
           "inputSchema": {
             "type": "object",
             "properties": {
@@ -989,7 +989,7 @@
         {
           "name": "proposeSamplesToOrganisation",
           "risk": "external",
-          "description": "Propose sample images for one of the organisation's brands (its house style when brand is left out): once an administrator approves them they join the brand's references, so every member's agents see them. With no images, the open deck's slides are exported as PNGs (the images export, which refuses an unverified layout) and sent: all of them up to 12, or the slides you name. images instead sends PNG, JPEG or WebP files by absolute path (at most 12). Optional note. Tell the person the reply's message.",
+          "description": "Call getDeckContext first. Propose sample images for one of the organisation's brands (its house style when brand is left out): once an administrator approves them they join the brand's references, so every member's agents see them. With no images, the open deck's slides are exported as PNGs (the images export, which refuses an unverified layout) and sent: all of them up to 12, or the slides you name. images instead passes PNG, JPEG or WebP files by absolute path (at most 12). Optional note. Tell the person the reply's message.",
           "inputSchema": {
             "type": "object",
             "properties": {
