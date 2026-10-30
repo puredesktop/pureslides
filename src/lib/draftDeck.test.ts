@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseDraft } from './draftDeck'
+import { deckDesignGuide, parseDraft } from './draftDeck'
 
 describe('parseDraft', () => {
   it('reads the object shape it asks for', () => {
@@ -49,5 +49,15 @@ describe('a response that was cut off', () => {
     const parsed = parseDraft(tricky)
     expect(parsed.slides).toHaveLength(1)
     expect(parsed.slides[0].html).toContain('Ok')
+  })
+})
+
+describe('the deck design guide', () => {
+  it('carries the copy rule for every look: the brief is the words, a reference only the look, no filler cards', () => {
+    for (const guide of [deckDesignGuide(), deckDesignGuide('custom', '<div id="deck"></div>')]) {
+      expect(guide).toMatch(/quotes a claim or restates it closely/)
+      expect(guide).toMatch(/Never reuse a reference's own headline or taglines/)
+      expect(guide).toMatch(/Never\s+a card holding only a label/)
+    }
   })
 })
