@@ -10,8 +10,10 @@
  * The typography a room notices — text too small to read from the back,
  * lines too long to follow, three typefaces, a headline ending on one word,
  * a slide of paragraphs, weak contrast, a headline smaller than its text —
- * is checked in `typeCheck`, as warnings.
+ * is checked in `typeCheck`, as warnings. A card holding only a word or two
+ * (filler, against the suite's copy rule) is checked in `copyCheck`, as a warning.
  */
+import { copyFindings } from './copyCheck'
 import { typographyFindings } from './typeCheck'
 
 export type CheckSeverity = 'error' | 'warning'
@@ -135,6 +137,7 @@ export function checkDeck(html: string): CheckFinding[] {
   })
 
   findings.push(...typographyFindings(doc, root, slides))
+  findings.push(...copyFindings(slides))
 
   const head = doc.head?.innerHTML ?? ''
   if (/<link[^>]+href=["']https?:/i.test(head)) {

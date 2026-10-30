@@ -114,7 +114,9 @@ typefaces; a mono face for code does not count), `type-widow` (a headline
 ending on one word), `type-words` (over 60 words on a slide), `type-contrast`
 (under 4.5:1, or 3:1 for large text) and `type-hierarchy` (a headline smaller
 than the text under it; a figure may be larger). Fix them like layout
-findings. For how to choose a look, pair, scale, align, colour and space a
+findings. It also warns `copy-thin-card`: a card (a box beside others in a
+row or grid, or anything classed `card`) holding only a word or two. Give it
+a claim from the brief or remove it (see "The words come from the brief"). For how to choose a look, pair, scale, align, colour and space a
 deck, and for the final visual review, read the **Slide typography and
 design** skill.
 
@@ -170,6 +172,25 @@ is with this app's tools:
 8. **Keep it.** `saveLookAsBrand` writes the look as a brand (the shared
    format, with fonts, logos, the motif art and the references beside it), so
    Canvas, PureSite and PureDesign make the next piece in the same look.
+
+## The words come from the brief
+
+When the brief gives claims or copy, the deck's words are the client's. The
+rule is the suite's shared **Copy comes from the brief**, section 8 of the
+**Matching a house style** skill (`read_skill`); in short:
+
+- Every headline, subhead, card and call to action quotes a claim from the
+  brief or restates it closely: no new facts, numbers, customers or
+  capabilities, and no lines of your own ("From workshop to rollout.").
+- A reference is for the look, not the words. Never put its headline or
+  taglines on a slide unless the brief says to, even while `viewSlide` shows
+  it beside your slide.
+- No filler. A card carries a real claim or is removed; never a card with
+  only a label ("Shape", "Learn"). A punchy cut of a claim is fine when it
+  means the same.
+- Before finishing, list each claim-bearing line next to the claim it comes
+  from (in your reply), and fix any line that has none. `checkDeck`'s
+  `copy-thin-card` catches the thin cards; the list catches the rest.
 
 ## Video on a slide
 
