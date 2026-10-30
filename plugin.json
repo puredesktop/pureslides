@@ -359,7 +359,7 @@
         {
           "name": "listBlocks",
           "risk": "read",
-          "description": "The slide compositions on offer — title, statement, points that build, cards, two-column, full-bleed image, full-bleed video, video in a frame, screenshot, quote, number, before-and-after, sequence, agenda, divider, end card. Each says what it is FOR and how many presses it takes. Reach for these rather than inventing a layout: a deck written from nothing comes out as fifteen headline-and-bullets slides.",
+          "description": "The slide compositions on offer — title, statement, points that build, cards, two-column, full-bleed image, full-bleed video, video in a frame, screenshot, quote, number, key figures, before-and-after, sequence, agenda, divider, end card. Each says what it is FOR and how many presses it takes. Reach for these rather than inventing a layout: a deck written from nothing comes out as fifteen headline-and-bullets slides.",
           "inputSchema": {
             "type": "object",
             "properties": {}
@@ -534,6 +534,25 @@
                 "type": "number"
               }
             }
+          },
+          "requiresApproval": true
+        },
+        {
+          "name": "setLook",
+          "description": "Choose the deck's look: a palette AND a type voice (heading and body faces that ship with the app, a modular scale, leading, tracking and line lengths), set as --slide-* tokens that every block and slide reads. auto: Inter, neutral, or read from an attached reference. ink: Space Grotesk over IBM Plex Sans, dark; product and engineering. paper: Newsreader Display over Newsreader, warm editorial; essays and research. signal: Bricolage Grotesque over Inter, bold; launches and pitches. brief: Archivo, dense; reports and figures. gallery: Instrument Serif over Instrument Sans; design and portfolios. clear: Atkinson Hyperlegible Next, larger and highest contrast; teaching and big rooms. Set it before drafting; changing it later restyles every slide that uses the tokens.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "look": {
+                "type": "string",
+                "enum": ["auto", "ink", "paper", "signal", "brief", "gallery", "clear"]
+              },
+              "baseHash": {
+                "type": "string",
+                "description": "The deck hash from your last getDeckContext/getSlide/listSlides read. When it no longer matches, the edit is refused with the current hash — re-read and redo it. Optional for now; always pass it."
+              }
+            },
+            "required": ["look"]
           },
           "requiresApproval": true
         },

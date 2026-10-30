@@ -1,4 +1,4 @@
-import { lookDeclarations } from './deckLooks'
+import { lookDeclarations, lookFromHtml } from './deckLooks'
 import { withDeckType } from './deckType'
 /**
  * The deck document, and its package.
@@ -202,5 +202,6 @@ export function summarizeDeck(
     slides: slideCount,
     width: geometry.width,
     height: geometry.height,
+    look: lookFromHtml(document.html) ?? 'auto',
   }
 }
