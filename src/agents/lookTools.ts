@@ -194,12 +194,20 @@ export async function setCustomLookHandler(
         ...(notes.length ? { notes } : {}),
         ...(motifIdeas.length
           ? { motifsToGenerate: motifIdeas, nextMotif: 'These motifs have a description and no art yet: generate each with makeMotif from its description and the reference, then use it.' }
-          : {}),
+          : !spec.motif
+            ? {
+                nextMotif: context.generateImage
+                  ? 'The look has no motif yet. If the reference has a recurring graphic idea (glowing nodes and lines, a grain, a light field, a texture), generate it now with makeMotif, prompted from the reference and passing it as reference, before writing slides. Do not draw it with CSS shapes or SVG lines.'
+                  : 'The look has no motif and this desktop has no image model: say so; a simple SVG stand-in in the brand colours is the only fallback.',
+              }
+            : {}),
         hash: result.hash,
         changed: result.changed,
         tokens:
           'Write slides with --slide-* tokens: --slide-accent-2 (a second-colour line), --slide-highlight (a small bright note), --slide-label-font (tags and kickers), --slide-radius (cards and buttons), plus every stock token. Put data-motif="none" on a slide that should stand clear of the motif.',
-        next: 'viewSlide with compareWith set to the reference, and fix what differs, before you call the deck done.',
+        next: spec.motif || !context.generateImage
+          ? 'viewSlide with compareWith set to the reference, and fix what differs, before you call the deck done.'
+          : 'makeMotif for the reference’s motif (see nextMotif), then write the slides, then viewSlide with compareWith set to the reference and fix what differs before you call the deck done.',
       }),
     }
   } catch (error) {

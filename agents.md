@@ -143,7 +143,8 @@ is with this app's tools:
 4. **Set it**: `setCustomLook` with `brand`, or with `colors`, `fonts`,
    `scale`, `radius` read off the reference. Its notes report contrast
    failures and faces that would not travel; fix them.
-5. **Generate the motif; do not draw it.** A recurring graphic idea in the
+5. **Generate the motif; do not draw it.** Do this before writing slides,
+   whenever the reference has one; a deck without it is not the brand. A recurring graphic idea in the
    reference — a network of glowing nodes, a grain, a light field, a texture,
    hero or conceptual art — is made with the image model: `makeMotif`, with a
    prompt describing it from the reference, and `reference` set so the model
