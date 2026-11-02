@@ -17,7 +17,12 @@ const mocks = vi.hoisted(() => ({
   newDeck: null as unknown as () => void,
   brandsOffered: false,
   defaultBrand: vi.fn(),
+  compact: false,
+  board: null as null | { compact?: boolean; deckTitle?: string },
+  wizardOpen: false,
+  switcherVariants: [] as Array<{ variant?: string; open?: boolean }>,
 }))
+vi.mock('./hooks/useCompactInRoom', () => ({ useCompactInRoom: () => mocks.compact }))
 vi.mock('@purescience/platform-ui/bridge/react/usePlatformBridge', () => ({
   usePlatformBridge: () => ({ ready: true, meta: {} }),
 }))
@@ -55,8 +60,9 @@ vi.mock('@purescience/platform-bridge/components/AppFrame', () => ({
 }))
 vi.mock('@purescience/platform-ui/components/common/documents', () => ({
   DocumentHeaderActions: () => null,
-  DocumentSwitcher: ({ onCreateNew }: { onCreateNew: () => void }) => {
+  DocumentSwitcher: ({ onCreateNew, variant, open }: { onCreateNew: () => void; variant?: string; open?: boolean }) => {
     mocks.newDeck = onCreateNew
+    mocks.switcherVariants.push({ variant, open })
     return null
   },
 }))
@@ -87,14 +93,20 @@ vi.mock('./bridge/platformBridge', () => ({
   proposeBrandSamples: vi.fn(),
 }))
 vi.mock('./components/SlideBoardView', () => ({
-  SlideBoardView: ({ previews, onLook }: { previews: Record<string, string>; onLook: (look: string) => void }) => {
+  SlideBoardView: ({ previews, onLook, compact, deckTitle }: { previews: Record<string, string>; onLook: (look: string) => void; compact?: boolean; deckTitle?: string }) => {
     mocks.changeLook = onLook
     mocks.previews = previews
+    mocks.board = { compact, deckTitle }
     return null
   },
 }))
 vi.mock('./components/AssetsPane', () => ({ AssetsPane: () => null }))
-vi.mock('./components/NewDeckWizard', () => ({ NewDeckWizard: () => null }))
+vi.mock('./components/NewDeckWizard', () => ({
+  NewDeckWizard: ({ open }: { open: boolean }) => {
+    mocks.wizardOpen = open
+    return null
+  },
+}))
 vi.mock('./components/PresentWindow', () => ({ PresentWindow: () => null }))
 vi.mock('./components/ExportDialog', () => ({ ExportDialog: () => null }))
 vi.mock('./components/HtmlDialog', () => ({ HtmlDialog: () => null }))
@@ -126,6 +138,10 @@ async function render(path?: string) {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.compact = false
+  mocks.board = null
+  mocks.wizardOpen = false
+  mocks.switcherVariants = []
   mocks.brandsOffered = false
   mocks.defaultBrand.mockResolvedValue(null)
   files.clear()
@@ -306,4 +322,47 @@ it('with no organisation a new deck keeps the stock look', async () => {
   await act(async () => {})
   expect(mocks.context.document.html).toContain('data-look="auto"')
   expect(mocks.context.documentPath).toBeNull()
+})
+
+it('off, the board is not compact and the landing deck list shows', async () => {
+  await render()
+  expect(mocks.switcherVariants.some(item => item.variant === 'landing')).toBe(true)
+  expect(host.textContent).not.toContain('No deck open')
+  await render('/A.deck')
+  expect(mocks.board?.compact).toBe(false)
+})
+it('compact with no deck offers no deck list, and says where to go', async () => {
+  mocks.compact = true
+  await render()
+  expect(mocks.switcherVariants.some(item => item.variant === 'landing')).toBe(false)
+  expect(host.textContent).toContain('No deck open')
+})
+it('the deck, its saving and the agent tools carry straight through compact and back', async () => {
+  await render('/A.deck')
+  const tools = mocks.context
+  mocks.compact = true
+  await render()
+  expect(mocks.board).toEqual({ compact: true, deckTitle: 'Deck A' })
+  expect(mocks.context).not.toBe(tools) // re-registered with the current deck, as on any render
+  expect(mocks.context.document.title).toBe('Deck A')
+  const edited = htmlA.replace('Deck A', 'A edited in the room')
+  await act(async () => {
+    mocks.context.applyDeck(edited, undefined, undefined, { baseHash: mocks.context.hash })
+  })
+  mocks.compact = false
+  mocks.save.mockClear()
+  await render('/B.deck')
+  expect(files.get('/A.deck/index.html')).toBe(edited)
+  expect(mocks.board?.compact).toBe(false)
+})
+it('a wizard left open waits behind compact and comes back after Expand', async () => {
+  await render('/A.deck')
+  await act(async () => mocks.newDeck())
+  expect(mocks.wizardOpen).toBe(true)
+  mocks.compact = true
+  await render()
+  expect(mocks.wizardOpen).toBe(false)
+  mocks.compact = false
+  await render()
+  expect(mocks.wizardOpen).toBe(true)
 })

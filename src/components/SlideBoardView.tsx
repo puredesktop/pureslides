@@ -8,7 +8,7 @@
  * rather than a picture of one.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { styled } from 'styled-components'
+import { createGlobalStyle, styled } from 'styled-components'
 import { ACCENT } from '../constants'
 import { SlideFrame } from './SlideFrame'
 import { readElement } from '../lib/slides'
@@ -84,6 +84,13 @@ interface SlideBoardViewProps {
   houseStyleName?: string | null
   /** Opens "Propose to organisation…"; absent when this desktop cannot propose. */
   onPropose?: () => void
+  /**
+   * Beside Executive (useCompactInRoom): the slide large, a thin strip, previous and next, typing in the slide.
+   * The rest is hidden, not removed, so its state lasts until Expand gives the full board back.
+   */
+  compact?: boolean
+  /** The deck's name, for compact: the app's header row, which shows it otherwise, is hidden there. */
+  deckTitle?: string
 }
 
 export function SlideBoardView({
@@ -130,6 +137,8 @@ export function SlideBoardView({
   houseStyleName = null,
   onPropose,
   documentPath = null,
+  compact = false,
+  deckTitle = '',
 }: SlideBoardViewProps): React.ReactElement {
   const slide: Slide | undefined = slides[selected] ?? slides[0]
   const [request, setRequest] = useState('')
@@ -142,6 +151,7 @@ export function SlideBoardView({
    * express "put it at the end" without a special case.
    */
   const [picker, setPicker] = useState(false)
+  const pickerShown = picker && !compact
   const [filesOpen, setFilesOpen] = useState(false)
   // The stage's inner box, so the live slide fits it: as wide as the stage allows, or as tall, whichever the
   // frame's aspect reaches first, and centred. A fixed width spilled past a narrow stage, off to the right.
@@ -207,8 +217,11 @@ export function SlideBoardView({
         onElementSelection([{ path, label }])
         return
       }
-      setInspector('edit')
-      setInspectorOpen(true)
+      // The inspector answers a pick; hidden in compact, it stays as the person left it.
+      if (!compact) {
+        setInspector('edit')
+        setInspectorOpen(true)
+      }
       const already = elementSelection.some(item => item.path === path)
       if (already && additive) {
         onElementSelection(elementSelection.filter(item => item.path !== path))
@@ -218,7 +231,7 @@ export function SlideBoardView({
         additive ? [...elementSelection, { path, label }] : [{ path, label }],
       )
     },
-    [elementSelection, onElementSelection, onSelect, selected],
+    [compact, elementSelection, onElementSelection, onSelect, selected],
   )
 
   /**
@@ -291,7 +304,8 @@ export function SlideBoardView({
 
   return (
     <Root $inspectorOpen={inspectorOpen && tab === 'slides'} {...deckAgentRefs(documentPath)}>
-      {picker ? (
+      {compact ? <CompactBoardStyle /> : null}
+      {pickerShown ? (
         <PickerScrim onClick={() => setPicker(false)}>
           <PickerBox role="dialog" aria-modal="true" aria-label="Choose a slide layout" onKeyDown={containDialogFocus} onClick={event => event.stopPropagation()}>
             <PickerHead>
@@ -331,7 +345,7 @@ export function SlideBoardView({
           </PickerBox>
         </PickerScrim>
       ) : null}
-      <Stage inert={picker || undefined}>
+      <Stage inert={pickerShown || undefined}>
         <Toolbar>
           <Tabs role="tablist" aria-label="Board">
             <TabButton
@@ -396,9 +410,9 @@ export function SlideBoardView({
           </ExportButton>
         </Toolbar>
 
-        {tab === 'assets' ? (
-          <AssetsPane>{assetsPane}</AssetsPane>
-        ) : (
+        {/* Compact has no tabs to come back with, so it always shows the slides; Files stays mounted, hidden. */}
+        {tab === 'assets' ? <AssetsPane>{assetsPane}</AssetsPane> : null}
+        {tab !== 'assets' || compact ? (
           <Body>
             <Strip
               ref={stripRef}
@@ -420,7 +434,7 @@ export function SlideBoardView({
                   data-slide-card={item.index}
                   {...slideAgentRefs(item.index, item.headline)}
                   type="button"
-                  draggable
+                  draggable={!compact}
                   $selected={item.index === selected}
                   $dragging={dragging === item.index}
                   onClick={() => onSelect(item.index)}
@@ -445,7 +459,7 @@ export function SlideBoardView({
                       slide={item.index}
                       step={item.steps}
                       geometry={geometry}
-                      width={168}
+                      width={compact ? COMPACT_CARD_WIDTH : 168}
                       previews={previews}
                       onLayout={onLayout}
                     />
@@ -516,7 +530,7 @@ export function SlideBoardView({
                   <SlideFrame
                     html={html}
                     slide={slide.index}
-                    step={step}
+                    step={compact ? slide.steps : step}
                     geometry={geometry}
                     width={stageWidth}
                     previews={previews}
@@ -530,6 +544,39 @@ export function SlideBoardView({
                     onLayout={onLayout}
                   />
                 </SelectedStage>
+                {compact ? (
+                  <CompactNav>
+                    <CompactTitle title={deckTitle}>{deckTitle}</CompactTitle>
+                    <CompactMove role="group" aria-label="Move between slides">
+                      <TransportButton
+                        type="button"
+                        aria-label="Previous slide"
+                        disabled={slide.index === 0}
+                        onClick={() => onSelect(slide.index - 1)}
+                      >
+                        ‹
+                      </TransportButton>
+                      <PositionLabel>{String(slide.index + 1).padStart(2, '0')} <Faint>/ {String(slides.length).padStart(2, '0')}</Faint></PositionLabel>
+                      <TransportButton
+                        type="button"
+                        aria-label="Next slide"
+                        disabled={slide.index >= slides.length - 1}
+                        onClick={() => onSelect(slide.index + 1)}
+                      >
+                        ›
+                      </TransportButton>
+                    </CompactMove>
+                    <CompactAside>
+                      {overlaps(slide.index) ? (
+                        <Warn title="Two elements that both carry content are sitting on top of each other. Scaling cannot fix this — the slide's layout has to change.">
+                          {overlaps(slide.index)} overlapping
+                        </Warn>
+                      ) : (
+                        <CompactHint>Click text, then click again to edit</CompactHint>
+                      )}
+                    </CompactAside>
+                  </CompactNav>
+                ) : (
                 <Transport>
                   <PositionLabel>{String(slide.index + 1).padStart(2, '0')} <Faint>/ {String(slides.length).padStart(2, '0')}</Faint></PositionLabel>
                   {slide.steps ? (
@@ -579,6 +626,7 @@ export function SlideBoardView({
                   <span style={{ flex: 1 }} />
                   <SelectionHint>Click to select · Shift-click to add</SelectionHint>
                 </Transport>
+                )}
               </Selected>
             ) : null}
             <Foot>
@@ -590,7 +638,7 @@ export function SlideBoardView({
               ) : null}
             </Foot>
           </Body>
-        )}
+        ) : null}
       </Stage>
 
       {tab === 'slides' && slide && inspectorOpen ? (
@@ -1693,3 +1741,78 @@ const DesignNote = styled.p`margin: 0; font-size: 12px; line-height: 1.5; color:
 const HouseStyleNote = styled.p`margin: 0; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--platform-colors-text);`
 const ProposeRow = styled.div`display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--pure-chrome-line); button { padding: 0 12px; align-self: flex-start; }`
 const LayoutPreview = styled.span`display: flex; justify-content: center; overflow: hidden; width: 100%; margin-bottom: 8px; border-radius: 5px; pointer-events: none; background: var(--pure-chrome-well);`
+
+/** A thumbnail in compact's strip: thin, and still a real frame, so every slide goes on being measured. */
+const COMPACT_CARD_WIDTH = 96
+
+const CompactNav = styled.div`
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+`
+const CompactTitle = styled.span`
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--pure-chrome-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+const CompactMove = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+const CompactAside = styled.div`
+  min-width: 0;
+  overflow: hidden;
+  text-align: right;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+`
+const CompactHint = styled(SelectionHint)`
+  @media (max-width: 520px) { display: none; }
+`
+
+/**
+ * The whole compact layout, in one place, and mounted only while compact: the full board carries none of it.
+ * The chrome is hidden, not removed, so its state lasts. Selectors are repeated to outrank the components' own
+ * `&&` rules and their narrow-width media queries, which a half-window pane would otherwise trip (the 1000px
+ * ones give the stage a 640px minimum height and a scrolling page; the 640px ones a 168px card).
+ */
+const CompactBoardStyle = createGlobalStyle`
+  ${Root}${Root} { grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+  ${Stage}${Stage} { min-height: 0; }
+  ${Toolbar}${Toolbar}${Toolbar},
+  ${Rail}${Rail}${Rail},
+  ${AssetsPane}${AssetsPane},
+  ${StripHeading}${StripHeading},
+  ${AddCard}${AddCard},
+  ${DropLine}${DropLine},
+  ${CardBadge}${CardBadge},
+  ${CardLabel}${CardLabel},
+  ${CardTick}${CardTick},
+  ${CardMarks}${CardMarks} { display: none !important; }
+  ${Body}${Body} {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
+  }
+  ${Selected}${Selected} { grid-row: 1; grid-column: 1; gap: 8px; padding: 12px 12px 0; }
+  ${SelectedStage}${SelectedStage} { padding: 12px; }
+  ${Strip}${Strip}${Strip} {
+    grid-row: 2;
+    grid-column: 1;
+    flex-direction: row;
+    width: 100%;
+    gap: 8px;
+    padding: 8px 12px 6px;
+    overflow: auto hidden;
+    background: transparent;
+    border-right: 0 !important;
+    scrollbar-width: thin;
+  }
+  ${Strip}${Strip}${Strip} > ${CardSlot}${CardSlot} { flex: 0 0 auto; }
+  ${Foot}${Foot} { grid-row: 3; grid-column: 1; padding: 0 12px 8px; }
+`
