@@ -197,6 +197,8 @@ import { createDeckTransitions } from './lib/deckTransitions'
 import { readDeckPackage } from './lib/deckPackage'
 import { readMaterialPreviews } from './lib/materialPreviews'
 import { useDeckResourceOpen } from './hooks/useDeckResourceOpen'
+import { useCompactInRoom } from './hooks/useCompactInRoom'
+import { CompactFrameStyle, CompactNoDeck } from './components/CompactRoom'
 
 const IDLE_PROGRESS: ExportProgressState = {
   phase: 'idle',
@@ -249,6 +251,7 @@ const historyFs: HistoryFs = {
 
 export function App(): React.ReactElement {
   const { ready, meta } = usePlatformBridge()
+  const compact = useCompactInRoom()
   const drawerRequestRef = useRef<DrawerRequest | null>(null)
   const drawerCommitBusy = useRef(false)
   const standaloneDev = isStandaloneDevMode()
@@ -2429,10 +2432,11 @@ export function App(): React.ReactElement {
         />
       }
     >
+      {compact ? <CompactFrameStyle /> : null}
       {hasOpenDeck ? (
         <>
           <NewDeckWizard
-            open={wizardOpen}
+            open={wizardOpen && !compact}
             onSetRole={setAssetRole}
             brief={brief}
             onBrief={next => {
@@ -2665,7 +2669,11 @@ export function App(): React.ReactElement {
           houseStyleName={deckHouseStyleName}
           onPropose={brandsOffered() ? () => setProposeOpen(true) : undefined}
           documentPath={lifecycle.doc.path ?? documentPath}
+          compact={compact}
+          deckTitle={document.title?.trim() || (lifecycle.doc.path ? fileNameFromPath(lifecycle.doc.path) : '')}
         />
+      ) : compact ? (
+        <CompactNoDeck />
       ) : (
         <DocumentSwitcher
           appSlug={DECK_APP_SLUG}
@@ -2688,7 +2696,7 @@ export function App(): React.ReactElement {
         variant="modal"
         previewStyle="grid"
         loadPreview={loadDeckPreview}
-        open={switcherOpen}
+        open={switcherOpen && !compact}
         onClose={() => setSwitcherOpen(false)}
         onOpenDocument={(path: string) => {
           setSwitcherOpen(false)
