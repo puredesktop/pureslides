@@ -1815,4 +1815,43 @@ const CompactBoardStyle = createGlobalStyle`
   }
   ${Strip}${Strip}${Strip} > ${CardSlot}${CardSlot} { flex: 0 0 auto; }
   ${Foot}${Foot} { grid-row: 3; grid-column: 1; padding: 0 12px 8px; }
+
+  /* The held look: calm enterprise software on one white surface. Hairlines (#dde1e7) in place of grounds, cards and
+     shadows; corners 3px at most; one muted accent; sans type at 12px for the one line of commentary. */
+  ${Root}${Root} {
+    --app-acc: #2f5d8c;
+    background: #ffffff;
+  }
+  ${SelectedStage}${SelectedStage} {
+    border-radius: 0;
+    background: #ffffff;
+    padding: 4px 12px;
+  }
+  ${SelectedStage}${SelectedStage} > div,
+  ${Root}${Root} [class*='SlideFrame__Box-'] {
+    box-shadow: none !important;
+  }
+  ${SelectedStage}${SelectedStage} [class*='SlideFrame__Box-'] { outline: 1px solid #dde1e7; }
+  ${CardFrame}${CardFrame} { border-radius: 3px; }
+  ${Strip}${Strip}${Strip} { border-top: 1px solid #dde1e7; }
+  ${TransportButton}${TransportButton} {
+    height: 28px;
+    width: 28px;
+    border-color: #cdd1d7;
+    border-radius: 3px;
+    background: #ffffff;
+  }
+  ${Foot}${Foot} {
+    padding-top: 6px;
+    border-top: 1px solid #dde1e7;
+  }
+  ${StatusLine}${StatusLine},
+  ${StatusLine}${StatusLine} * {
+    font-family: var(--platform-typography-font-family);
+    font-size: 12px;
+  }
+  ${CompactTitle}${CompactTitle} {
+    color: var(--platform-colors-text);
+    font-weight: 500;
+  }
 `
