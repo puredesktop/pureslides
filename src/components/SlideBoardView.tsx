@@ -9,7 +9,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createGlobalStyle, styled } from 'styled-components'
+import { agentsOffered } from '@purescience/platform-ui/bridge/workspace'
 import { ACCENT } from '../constants'
+import { outputOffered } from '../lib/offered'
 import { SlideFrame } from './SlideFrame'
 import { readElement } from '../lib/slides'
 import { deckSeconds } from '../lib/deckDocument'
@@ -405,9 +407,11 @@ export function SlideBoardView({
             </svg>
             Present
           </PresentButton>
-          <ExportButton type="button" onClick={onExport}>
-            Export…
-          </ExportButton>
+          {outputOffered() ? (
+            <ExportButton type="button" onClick={onExport}>
+              Export…
+            </ExportButton>
+          ) : null}
         </Toolbar>
 
         {/* Compact has no tabs to come back with, so it always shows the slides; Files stays mounted, hidden. */}
@@ -749,42 +753,46 @@ export function SlideBoardView({
 
           </>}
           <AskBlock>
-            <SectionHead>{scopeHead}</SectionHead>
-            <Scope>
-              <ScopeButton
-                type="button"
-                $on={slideSelection.length === slides.length}
-                onClick={() =>
-                  onSlideSelection(
-                    slideSelection.length === slides.length
-                      ? []
-                      : slides.map(item => item.index),
-                  )
-                }
-              >
-                {slideSelection.length === slides.length ? 'Whole deck' : 'Select all slides'}
-              </ScopeButton>
-              {slideSelection.length ? (
-                <ScopeButton type="button" onClick={() => onSlideSelection([])}>
-                  Clear ({slideSelection.length})
-                </ScopeButton>
-              ) : null}
-              {elementSelection.length ? (
-                <ScopeButton type="button" onClick={() => onElementSelection([])}>
-                  Clear elements ({elementSelection.length})
-                </ScopeButton>
-              ) : null}
-              {elementSelection.length ? (
-                <ScopeButton
-                  type="button"
-                  $danger
-                  onClick={() => onDeleteElements(elementSelection.map(item => item.path))}
-                >
-                  Delete{' '}
-                  {elementSelection.length === 1 ? 'element' : `${elementSelection.length} elements`}
-                </ScopeButton>
-              ) : null}
-            </Scope>
+            {agentsOffered() ? (
+              <>
+                <SectionHead>{scopeHead}</SectionHead>
+                <Scope>
+                  <ScopeButton
+                    type="button"
+                    $on={slideSelection.length === slides.length}
+                    onClick={() =>
+                      onSlideSelection(
+                        slideSelection.length === slides.length
+                          ? []
+                          : slides.map(item => item.index),
+                      )
+                    }
+                  >
+                    {slideSelection.length === slides.length ? 'Whole deck' : 'Select all slides'}
+                  </ScopeButton>
+                  {slideSelection.length ? (
+                    <ScopeButton type="button" onClick={() => onSlideSelection([])}>
+                      Clear ({slideSelection.length})
+                    </ScopeButton>
+                  ) : null}
+                  {elementSelection.length ? (
+                    <ScopeButton type="button" onClick={() => onElementSelection([])}>
+                      Clear elements ({elementSelection.length})
+                    </ScopeButton>
+                  ) : null}
+                  {elementSelection.length ? (
+                    <ScopeButton
+                      type="button"
+                      $danger
+                      onClick={() => onDeleteElements(elementSelection.map(item => item.path))}
+                    >
+                      Delete{' '}
+                      {elementSelection.length === 1 ? 'element' : `${elementSelection.length} elements`}
+                    </ScopeButton>
+                  ) : null}
+                </Scope>
+              </>
+            ) : null}
 
             {elementSelection.length ? (
               <>
@@ -915,51 +923,53 @@ export function SlideBoardView({
               ) : null}
             </Assets>
 
-            <AskBox>
-              <AskInput
-                value={request}
-                placeholder={
-                  elementSelection.length
-                    ? 'Make it two lines, and bring it in on the second press…'
-                    : slideSelection.length > 1
-                      ? 'Warm the palette across the deck, and tighten every headline…'
-                      : 'Split this into three points that build one at a time…'
-                }
-                spellCheck={false}
-                onChange={event => setRequest(event.currentTarget.value)}
-                onKeyDown={event => {
-                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                    event.preventDefault()
-                    submitAsk()
+            {agentsOffered() ? (
+              <AskBox>
+                <AskInput
+                  value={request}
+                  placeholder={
+                    elementSelection.length
+                      ? 'Make it two lines, and bring it in on the second press…'
+                      : slideSelection.length > 1
+                        ? 'Warm the palette across the deck, and tighten every headline…'
+                        : 'Split this into three points that build one at a time…'
                   }
-                }}
-              />
-              <AskBoxFoot>
-                <Hint>{asking ? 'Working…' : scopeHint}</Hint>
-                <span style={{ flex: 1 }} />
-                <Kbd>⌘⏎</Kbd>
-                <SendButton
-                  type="button"
-                  aria-label="Send"
-                  disabled={!request.trim() || asking}
-                  onClick={submitAsk}
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                  spellCheck={false}
+                  onChange={event => setRequest(event.currentTarget.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                      event.preventDefault()
+                      submitAsk()
+                    }
+                  }}
+                />
+                <AskBoxFoot>
+                  <Hint>{asking ? 'Working…' : scopeHint}</Hint>
+                  <span style={{ flex: 1 }} />
+                  <Kbd>⌘⏎</Kbd>
+                  <SendButton
+                    type="button"
+                    aria-label="Send"
+                    disabled={!request.trim() || asking}
+                    onClick={submitAsk}
                   >
-                    <path d="M22 2 11 13" />
-                    <path d="M22 2 15 22l-4-9-9-4z" />
-                  </svg>
-                </SendButton>
-              </AskBoxFoot>
-            </AskBox>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M22 2 11 13" />
+                      <path d="M22 2 15 22l-4-9-9-4z" />
+                    </svg>
+                  </SendButton>
+                </AskBoxFoot>
+              </AskBox>
+            ) : null}
           </AskBlock>
         </Rail>
       ) : null}
