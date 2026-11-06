@@ -35,7 +35,7 @@ const Note = styled.div`
   padding: 24px;
   text-align: center;
   color: var(--platform-colors-text);
-  background: #ffffff;
+  background: light-dark(#ffffff, #1c1c1c);
 `
 
 const NoteTitle = styled.div`

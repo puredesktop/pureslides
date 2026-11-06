@@ -1826,34 +1826,37 @@ const CompactBoardStyle = createGlobalStyle`
   ${Strip}${Strip}${Strip} > ${CardSlot}${CardSlot} { flex: 0 0 auto; }
   ${Foot}${Foot} { grid-row: 3; grid-column: 1; padding: 0 12px 8px; }
 
+  /* Held, the page follows the desk's theme: white in a light one, the held greys in a dark one (docs/held-apps.md). */
+  html[data-platform-theme='dark'] { color-scheme: dark; }
+
   /* The held look: calm enterprise software on one white surface. Hairlines (#dde1e7) in place of grounds, cards and
      shadows; corners 3px at most; one muted accent; sans type at 12px for the one line of commentary. */
   ${Root}${Root} {
-    --app-acc: #2f5d8c;
-    background: #ffffff;
+    --app-acc: light-dark(#2f5d8c, #7fafe3);
+    background: light-dark(#ffffff, #1c1c1c);
   }
   ${SelectedStage}${SelectedStage} {
     border-radius: 0;
-    background: #ffffff;
+    background: light-dark(#ffffff, #1c1c1c);
     padding: 4px 12px;
   }
   ${SelectedStage}${SelectedStage} > div,
   ${Root}${Root} [class*='SlideFrame__Box-'] {
     box-shadow: none !important;
   }
-  ${SelectedStage}${SelectedStage} [class*='SlideFrame__Box-'] { outline: 1px solid #dde1e7; }
+  ${SelectedStage}${SelectedStage} [class*='SlideFrame__Box-'] { outline: 1px solid light-dark(#dde1e7, #3a3a3a); }
   ${CardFrame}${CardFrame} { border-radius: 3px; }
-  ${Strip}${Strip}${Strip} { border-top: 1px solid #dde1e7; }
+  ${Strip}${Strip}${Strip} { border-top: 1px solid light-dark(#dde1e7, #3a3a3a); }
   ${TransportButton}${TransportButton} {
     height: 28px;
     width: 28px;
-    border-color: #cdd1d7;
+    border-color: light-dark(#cdd1d7, #4a4a4a);
     border-radius: 3px;
-    background: #ffffff;
+    background: light-dark(#ffffff, #1c1c1c);
   }
   ${Foot}${Foot} {
     padding-top: 6px;
-    border-top: 1px solid #dde1e7;
+    border-top: 1px solid light-dark(#dde1e7, #3a3a3a);
   }
   ${StatusLine}${StatusLine},
   ${StatusLine}${StatusLine} * {
