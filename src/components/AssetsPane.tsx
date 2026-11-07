@@ -290,7 +290,7 @@ const RoleSelect = styled.select<{ $set: boolean }>`
       props.$set
         ? ACCENT
         : 'var(--pure-chrome-line)'};
-  border-radius: 7px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-surface);
   color: ${props =>
     props.$set
@@ -378,7 +378,7 @@ const Actions = styled.div`
 
 const PrimaryButton = styled.button`
   border: 1px solid ${ACCENT};
-  border-radius: 7px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: ${ACCENT};
   color: var(--pure-chrome-on-accent);
   padding: 8px 16px;
@@ -396,7 +396,7 @@ const PrimaryButton = styled.button`
 const SmallButton = styled.button`
   height: var(--pure-chrome-control-height);
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 7px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-surface);
   color: var(--platform-colors-text);
   padding: 0 11px;

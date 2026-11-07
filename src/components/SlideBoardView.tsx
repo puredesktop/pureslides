@@ -28,6 +28,7 @@ import type { BoardTab, DeckGeometry, PickedElement } from '../types'
 import type { MaterialItem } from '../lib/material'
 import type { DeckVerification, LayoutReport, SlideEvidenceMap } from '../lib/deckVerification'
 import { assetAgentRefs, blockAgentRefs, deckAgentRefs, slideAgentRefs } from '../agentRefs'
+import { primaryLook, quiet } from '../ui/look'
 
 /** One verb offered beside the status line — Undo after a revision, Retry after a refused ask. */
 export interface StatusAction {
@@ -1018,12 +1019,13 @@ const StageHead = styled.div`
 `
 
 const Tabs = styled.div`
-  display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--pure-chrome-well);
+  display: flex; gap: 2px;
 `
 
+/** The open tab takes the shared selected look: a plain ground and a hairline in the app's colour, words ink. */
 const TabButton = styled.button.attrs(chrome('toolbar-control'))`
-  && { border-radius: 6px; }
-  &&[data-active] { background: var(--platform-colors-elevated); color: var(--platform-colors-text); box-shadow: 0 1px 3px rgb(15 23 42 / .08); }
+  && { border-radius: var(--pure-chrome-radius, 3px); }
+  :root:root:root body &&[data-active] { background: var(--p-chosen); color: var(--platform-colors-text); box-shadow: var(--p-chosen-edge); font-weight: 600; }
 `
 
 const Body = styled.div`
@@ -1059,9 +1061,9 @@ const PickerBox = styled.div`
   gap: 14px;
   padding: 22px;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--platform-colors-elevated);
-  border-radius: 16px;
+  border-radius: var(--pure-chrome-radius, 3px);
   box-shadow: 0 24px 80px rgb(15 23 42 / 0.24);
 `
 
@@ -1085,7 +1087,7 @@ const PickerCard = styled.button`
   gap: 4px;
   padding: 10px;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-surface);
   color: var(--platform-colors-text);
   font: inherit;
@@ -1120,7 +1122,7 @@ const CardSlot = styled.div`
 /** Where the slide will land — drawn in the gap, not on a card. */
 const DropLine = styled.div`
   height: 3px;
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: ${ACCENT};
 `
 
@@ -1132,9 +1134,13 @@ const Card = styled.button<{ $selected?: boolean; $dragging?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 5px;
-  padding: 0;
+  padding: 6px;
+  margin: -6px;
   border: 0;
-  background: none;
+  border-radius: 0;
+  /* The chosen slide takes the shared selected look around its picture and name. */
+  background: ${props => (props.$selected ? 'var(--p-chosen)' : 'none')};
+  box-shadow: ${props => (props.$selected ? 'var(--p-chosen-edge)' : 'none')};
   text-align: left;
   font: inherit;
   color: inherit;
@@ -1144,11 +1150,10 @@ const Card = styled.button<{ $selected?: boolean; $dragging?: boolean }>`
 const CardFrame = styled.span<{ $selected?: boolean }>`
   position: relative;
   display: block;
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   overflow: hidden;
-  outline: ${props =>
-    props.$selected ? `2px solid ${ACCENT}` : '1px solid var(--pure-chrome-line)'};
-  outline-offset: ${props => (props.$selected ? '1px' : '0')};
+  outline: 1px solid var(--pure-chrome-line);
+  outline-offset: 0;
 `
 
 /* The badge, tick and marks sit ON the slide picture, so they stay light over it in both modes. */
@@ -1156,12 +1161,13 @@ const CardBadge = styled.span<{ $selected?: boolean }>`
   position: absolute;
   top: 5px;
   left: 5px;
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   padding: 1px 6px;
   font-family: var(--platform-typography-font-family-mono);
   font-size: 9px;
-  background: ${props => (props.$selected ? ACCENT : 'rgb(255 255 255 / 0.92)')};
-  color: ${props => (props.$selected ? 'var(--pure-chrome-on-accent)' : '#17171d')};
+  background: rgb(255 255 255 / 0.92);
+  color: #17171d;
+  font-weight: ${props => (props.$selected ? 700 : 400)};
 `
 
 const CardTick = styled.span<{ $on: boolean }>`
@@ -1174,7 +1180,7 @@ const CardTick = styled.span<{ $on: boolean }>`
   place-items: center;
   border: 1px solid
     ${props => (props.$on ? ACCENT : 'var(--pure-chrome-line)')};
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: ${props => (props.$on ? ACCENT : 'rgb(255 255 255 / 0.88)')};
   color: var(--pure-chrome-on-accent);
   font-size: 10px;
@@ -1195,7 +1201,7 @@ const Mark = styled.span`
   display: grid;
   place-items: center;
   background: rgb(255 255 255 / 0.86);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   padding: 1px;
 `
 
@@ -1212,7 +1218,7 @@ const CardLabel = styled.span<{ $selected?: boolean }>`
 const AddCard = styled.button`
   flex: none;
   border: 1px dashed var(--pure-chrome-line);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: none;
   padding: 9px;
   font: inherit;
@@ -1239,7 +1245,7 @@ const SelectedStage = styled.div`
   min-height: 0;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-well);
   padding: 24px;
   @media (max-width: 640px) { padding: 12px; }
@@ -1258,7 +1264,7 @@ const TransportButton = styled.button`
   width: var(--pure-chrome-control-height);
   height: var(--pure-chrome-control-height);
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 7px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-surface);
   color: var(--platform-colors-text);
   cursor: pointer;
@@ -1275,7 +1281,7 @@ const StepButton = styled.button`
   height: var(--pure-chrome-control-height);
   padding: 0 11px;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 7px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-surface);
   color: var(--platform-colors-text);
   font: inherit;
@@ -1292,7 +1298,7 @@ const Dots = styled.div`
 const Dot = styled.span<{ $on: boolean }>`
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: 1px;
   cursor: pointer;
   background: ${props => (props.$on ? ACCENT : 'transparent')};
   border: 1px solid ${props => (props.$on ? ACCENT : 'var(--pure-chrome-line)')};
@@ -1329,7 +1335,7 @@ const StatusButton = styled.button`
   margin-left: 10px;
   padding: 1px 8px;
   border: 1px solid ${ACCENT};
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: none;
   color: ${ACCENT};
   font-family: var(--platform-typography-font-family-mono);
@@ -1352,7 +1358,7 @@ const VerifyBadge = styled.button.attrs(chrome('meta'))<{
     height: var(--pure-chrome-control-height);
     padding: 0 8px;
     border: 0;
-    border-radius: 7px;
+    border-radius: var(--pure-chrome-radius, 3px);
     background: transparent;
     font: inherit;
     font-size: var(--pure-chrome-meta-size);
@@ -1366,7 +1372,7 @@ const VerifyBadge = styled.button.attrs(chrome('meta'))<{
     content: '';
     width: 7px;
     height: 7px;
-    border-radius: 50%;
+    border-radius: 1px;
     background: ${props =>
       props.$state === 'failed'
         ? 'var(--platform-colors-danger)'
@@ -1405,7 +1411,7 @@ const Warn = styled.span`
   font-size: var(--pure-chrome-meta-size);
   padding: 2px 7px;
   margin-left: 10px;
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   color: var(--platform-colors-danger);
   background: var(--platform-colors-danger-surface, rgb(180 52 14 / 0.1));
 `
@@ -1416,7 +1422,7 @@ const CardWarn = styled.span`
   right: 26px;
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 1px;
   background: var(--platform-colors-danger);
 `
 
@@ -1436,7 +1442,7 @@ const OpButton = styled.button<{ $danger?: boolean }>`
   height: var(--pure-chrome-control-height);
   padding: 0;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 7px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-surface);
   color: ${props => (props.$danger ? 'var(--platform-colors-danger)' : 'var(--platform-colors-text)')};
   font: inherit;
@@ -1496,7 +1502,7 @@ const ScopeButton = styled.button<{ $on?: boolean; $danger?: boolean }>`
         : props.$on
           ? ACCENT
           : 'var(--pure-chrome-line)'};
-  border-radius: 7px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-surface);
   color: ${props =>
     props.$danger
@@ -1519,7 +1525,7 @@ const Chip = styled.span`
   max-width: 100%;
   padding: 3px 8px;
   border: 1px solid ${ACCENT};
-  border-radius: 999px;
+  border-radius: 2px;
   color: ${ACCENT};
   font-size: 12px;
   overflow: hidden;
@@ -1602,7 +1608,7 @@ const AssetThumb = styled.img`
   object-fit: contain;
   display: block;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-well);
 `
 
@@ -1612,7 +1618,7 @@ const AssetKind = styled.span`
   display: grid;
   place-items: center;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-surface);
   font-family: var(--platform-typography-font-family-mono);
   font-size: 9px;
@@ -1662,20 +1668,12 @@ const Kbd = styled.kbd`
 `
 
 const SendButton = styled.button`
+  ${quiet}
+  ${primaryLook}
   flex: none;
   width: var(--pure-chrome-control-height);
   height: var(--pure-chrome-control-height);
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 7px;
-  background: ${ACCENT};
-  color: var(--pure-chrome-on-accent);
-  cursor: pointer;
-  &:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
+  padding: 0;
 `
 
 const Hint = styled.div.attrs(chrome('meta'))`
@@ -1684,32 +1682,29 @@ const Hint = styled.div.attrs(chrome('meta'))`
 
 const Mono = styled.span.attrs(chrome('meta'))``
 
-const HtmlButton = styled.button.attrs(chrome('toolbar-control'))``
+/** Every toolbar action is a raised plain button with its word. */
+const HtmlButton = styled.button.attrs(chrome('toolbar-control'))`
+  && { ${quiet} height: 26px; padding: 0 9px; font-family: inherit; font-weight: 500; }
+`
 
 /** A plain toolbar action like History and HTML; Export stays the one accent. */
 const PresentButton = styled.button.attrs(chrome('toolbar-control'))`
-  && { display: inline-flex; align-items: center; gap: 6px; }
+  && { ${quiet} height: 26px; padding: 0 9px; font-family: inherit; font-weight: 500; }
 `
 
 /** The toolbar's one primary control: the accent's third and last appearance. */
 const ExportButton = styled.button`
-  height: var(--pure-chrome-control-height);
+  ${quiet}
+  ${primaryLook}
   padding: 0 14px;
-  border: 0;
-  border-radius: 7px;
-  background: var(--pure-chrome-accent);
-  color: var(--pure-chrome-on-accent);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
+  font-family: inherit;
 `
 
 const PrimaryButton = styled.button`
   height: var(--pure-chrome-control-height);
   padding: 0 18px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-accent);
   color: var(--pure-chrome-on-accent);
   font: inherit;
@@ -1750,7 +1745,7 @@ const DesignTitle = styled.div`font-size: 20px; font-weight: 600; letter-spacing
 const DesignNote = styled.p`margin: 0; font-size: 12px; line-height: 1.5; color: var(--pure-chrome-soft);`
 const HouseStyleNote = styled.p`margin: 0; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--platform-colors-text);`
 const ProposeRow = styled.div`display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--pure-chrome-line); button { padding: 0 12px; align-self: flex-start; }`
-const LayoutPreview = styled.span`display: flex; justify-content: center; overflow: hidden; width: 100%; margin-bottom: 8px; border-radius: 5px; pointer-events: none; background: var(--pure-chrome-well);`
+const LayoutPreview = styled.span`display: flex; justify-content: center; overflow: hidden; width: 100%; margin-bottom: 8px; border-radius: var(--pure-chrome-radius, 3px); pointer-events: none; background: var(--pure-chrome-well);`
 
 /** A thumbnail in compact's strip: thin, and still a real frame, so every slide goes on being measured. */
 const COMPACT_CARD_WIDTH = 96

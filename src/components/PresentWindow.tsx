@@ -540,7 +540,7 @@ const Notes = styled.div`
   min-height: 0;
   overflow-y: auto;
   border: 1px solid #26262c;
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: #15151a;
   padding: 16px 18px;
   font-size: 19px;
@@ -581,7 +581,7 @@ const RehearsalActions = styled.div`
 
 const RehearsalButton = styled.button`
   border: 1px solid #34343d;
-  border-radius: 6px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: #1b1b21;
   color: #e8e8ec;
   padding: 6px 9px;
@@ -612,7 +612,7 @@ const TargetLabel = styled.label`
 const TargetInput = styled.input`
   width: 78px;
   border: 1px solid #34343d;
-  border-radius: 5px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: #15151a;
   color: #e8e8ec;
   padding: 5px 7px;
@@ -662,7 +662,7 @@ const ReportRow = styled.div`
   gap: 8px;
   min-height: 30px;
   padding: 4px 8px;
-  border-radius: 5px;
+  border-radius: var(--pure-chrome-radius, 3px);
   color: #bfc0c7;
   text-align: right;
 
