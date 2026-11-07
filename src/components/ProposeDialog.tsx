@@ -185,7 +185,7 @@ const Dialog = styled.div`
   gap: 14px;
   padding: 22px;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 10px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--platform-colors-elevated, #fff);
   color: var(--platform-colors-text);
   box-shadow: 0 18px 50px rgb(15 15 18 / 0.28);
@@ -216,7 +216,7 @@ const Option = styled.button`
   gap: 4px;
   padding: 10px 12px;
   border: 1px solid var(--pure-chrome-line, var(--platform-colors-border));
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--platform-colors-elevated, #fff);
   color: var(--platform-colors-text);
   text-align: left;
@@ -278,7 +278,7 @@ const Actions = styled.div`
 const PrimaryButton = styled.button`
   padding: 8px 16px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: ${ACCENT};
   color: var(--pure-chrome-on-accent);
   font: inherit;
@@ -293,7 +293,7 @@ const PrimaryButton = styled.button`
 const GhostButton = styled.button`
   padding: 8px 14px;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--platform-colors-surface);
   color: var(--platform-colors-text);
   font: inherit;

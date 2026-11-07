@@ -106,15 +106,17 @@ const Choice = styled.button`
   flex-direction: column;
   gap: 5px;
   border: 1px solid var(--pure-chrome-line);
-  border-radius: 10px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--platform-colors-elevated);
   color: var(--platform-colors-text);
   text-align: left;
   font: inherit;
   cursor: pointer;
+  /* The chosen direction takes the shared selected look. */
   &[aria-pressed='true'] {
-    border-color: ${ACCENT};
-    box-shadow: 0 0 0 1px ${ACCENT};
+    border-color: transparent;
+    background: var(--p-chosen);
+    box-shadow: var(--p-chosen-edge);
   }
   &:hover:not(:disabled) {
     border-color: ${ACCENT};
@@ -134,7 +136,7 @@ const Sample = styled.span`
   padding: 8px;
   container-type: inline-size;
   min-height: 0;
-  border-radius: 6px;
+  border-radius: var(--pure-chrome-radius, 3px);
   display: flex;
   flex-direction: column;
   justify-content: space-between;

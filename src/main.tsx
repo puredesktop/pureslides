@@ -1,7 +1,10 @@
 import './heldInRoom'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
-import { WhiteNeutral } from './whiteNeutral'
+import { SlidesLook } from './ui/look'
+
+// The enterprise look is the look everywhere now, on the desktop as on Pure Server.
+document.documentElement.setAttribute('data-pure-look', 'enterprise')
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
@@ -10,7 +13,7 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <>
-    <WhiteNeutral />
+    <SlidesLook />
     <App />
   </>,
 )

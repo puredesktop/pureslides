@@ -18,6 +18,7 @@ import { containDialogFocus } from './dialogFocus'
 import { ASSET_ROLES, type MaterialItem } from '../lib/material'
 import type { AssetRole } from '../lib/assetNotes'
 import type { DeckGeometry } from '../types'
+import { primaryLook, quiet } from '../ui/look'
 
 const FRAMES = [
   { id: '16-9', label: '16:9', width: 1280, height: 720, note: 'Projectors and laptops' },
@@ -253,7 +254,7 @@ const Dialog = styled.div`
   gap: 22px;
   padding: 28px;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   /* The popover surface, opaque: the chrome surface is glass on a glass desk, and the editor showed through. */
   background: var(--platform-colors-elevated, #fff);
   box-shadow: 0 18px 50px rgb(15 15 18 / 0.3);
@@ -281,7 +282,7 @@ const Brief = styled.textarea`
   resize: vertical;
   padding: 10px 12px;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--platform-colors-surface);
   color: var(--platform-colors-text);
   font: inherit;
@@ -292,7 +293,7 @@ const Brief = styled.textarea`
 const Input = styled.input`
   padding: 8px 10px;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--platform-colors-surface);
   color: var(--platform-colors-text);
   font: inherit;
@@ -312,13 +313,13 @@ const Formats = styled.div`
 
 const FormatButton = styled.button<{ $active?: boolean }>`
   padding: 8px 12px;
-  border: 1px solid
-    ${props =>
-      props.$active ? ACCENT : 'var(--platform-colors-border)'};
-  border-radius: 8px;
-  background: ${props =>
-    props.$active ? ACCENT : 'var(--platform-colors-surface)'};
-  color: ${props => (props.$active ? 'var(--pure-chrome-on-accent)' : 'var(--platform-colors-text)')};
+  border: 1px solid ${props => (props.$active ? 'transparent' : 'var(--platform-colors-border)')};
+  border-radius: var(--pure-chrome-radius, 3px);
+  /* The chosen frame is selected, not an action: the shared selected look, words ink. */
+  background: ${props => (props.$active ? 'var(--p-chosen)' : 'var(--platform-colors-surface)')};
+  box-shadow: ${props => (props.$active ? 'var(--p-chosen-edge)' : 'none')};
+  color: var(--platform-colors-text);
+  font-weight: ${props => (props.$active ? 600 : 400)};
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -344,7 +345,7 @@ const FileThumb = styled.img`
   height: 78px;
   object-fit: contain;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--pure-chrome-well);
 `
 
@@ -354,7 +355,7 @@ const FileKind = styled.span`
   display: grid;
   place-items: center;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--platform-colors-surface);
   font-family: var(--platform-typography-font-family-mono, monospace);
   font-size: 9px;
@@ -370,7 +371,7 @@ const RoleSelect = styled.select<{ $set: boolean }>`
       props.$set
         ? ACCENT
         : 'var(--platform-colors-border)'};
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--platform-colors-surface);
   color: ${props =>
     props.$set
@@ -400,14 +401,12 @@ const Actions = styled.div`
 `
 
 const PrimaryButton = styled.button`
-  padding: 10px 18px;
-  border: 0;
-  border-radius: 8px;
-  background: ${ACCENT};
-  color: var(--pure-chrome-on-accent);
-  font: inherit;
+  ${quiet}
+  ${primaryLook}
+  height: 34px;
+  padding: 0 18px;
+  font-family: inherit;
   font-size: 14px;
-  cursor: pointer;
   &:disabled {
     opacity: 0.5;
     cursor: default;
@@ -417,7 +416,7 @@ const PrimaryButton = styled.button`
 const GhostButton = styled.button`
   padding: 8px 14px;
   border: 1px solid var(--platform-colors-border);
-  border-radius: 8px;
+  border-radius: var(--pure-chrome-radius, 3px);
   background: var(--platform-colors-surface);
   color: var(--platform-colors-text);
   font: inherit;
