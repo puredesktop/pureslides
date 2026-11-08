@@ -421,7 +421,7 @@ The Review button, `/review`, the mini view's Open and `openReview` are one func
 
 | Task | Tools |
 | --- | --- |
-| Let the person check the work | `openReview`, then stop and tell them. Their answers arrive as a new message. |
+| Let the person check the work | `openReview` with `note`, or `notes` by slide number, saying what they are looking at and what to judge. It shows above the slide. Then stop and tell them. Their answers arrive as a new message. |
 | Work through their answers | `getReviewFeedback`, then for each note: `setElementText`, `setElement` or `setSlideHtml`, check with `viewSlide`, then `settleReviewNote`. One at a time, never one big rewrite. |
 | See what they marked | `viewReviewItem` |
 | Cannot do a note | `settleReviewNote` with `needs-you` and the reason. Marks with no words and nothing they point at go here too. |

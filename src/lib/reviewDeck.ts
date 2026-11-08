@@ -64,6 +64,8 @@ export function deckReviewItems(html: string, scope: ReviewScope = {}, selection
     return {
       id: slide.getAttribute('data-slide-id') ?? `slide-${index + 1}`,
       name: words || `Slide ${index + 1}`,
+      // The speaker's words say what a slide is for. The assistant can say more when it opens a review.
+      ...(facts[index]?.notes?.trim() ? { note: facts[index].notes.trim() } : {}),
       anchor: { index, steps: facts[index]?.steps ?? 0 },
     }
   })

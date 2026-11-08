@@ -108,6 +108,13 @@ describe('whether a slide changed', () => {
   })
 })
 
+describe('what a slide is about', () => {
+  it('is its speaker\'s words, when it has any', () => {
+    const html = deck('<div data-slide><h1>One</h1><div data-notes hidden>Why we chose this.</div></div><div data-slide><h1>Two</h1></div>')
+    expect(deckReviewItems(html).map(i => i.note)).toEqual(['Why we chose this.', undefined])
+  })
+})
+
 describe('the deck\'s files', () => {
   const manifest = JSON.parse(readFileSync(join(process.cwd(), 'plugin.json'), 'utf8'))
 

@@ -1126,6 +1126,17 @@
               "setId": {
                 "type": "string",
                 "description": "The set for nextRound. Defaults to the latest."
+              },
+              "note": {
+                "type": "string",
+                "description": "What the person is looking at and what to judge, in a sentence or two. Shown above every slide that has no note of its own."
+              },
+              "notes": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "The same for particular slides: their number or item id, and the words. In a later round, say what changed."
               }
             },
             "required": []
