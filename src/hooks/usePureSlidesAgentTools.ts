@@ -18,6 +18,7 @@ import {
   proposeSamplesToOrganisationHandler,
 } from '../agents/orgTools'
 import type { AgentToolHandler } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
+import type { REVIEW_TOOL_NAMES } from '@purescience/platform-ui/review/tools'
 import { usePlatformAgentTools } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import {
   AgentDeckToolError,
@@ -73,6 +74,8 @@ const READ_ONLY_TOOLS = new Set([
   'getDrawerRequest',
   'listRevisions',
   'stopExport',
+  'getReviewFeedback',
+  'viewReviewItem',
 ])
 
 /**
@@ -104,13 +107,25 @@ export function usePureSlidesAgentTools(
   ready: boolean,
   context: DeckAgentToolContext,
   mayChangeDeck: () => boolean = () => true,
+  reviewTools: Partial<Record<(typeof REVIEW_TOOL_NAMES)[number], AgentToolHandler>> = {},
 ): void {
   const contextRef = useRef(context)
   contextRef.current = context
   const mayChangeRef = useRef(mayChangeDeck)
   mayChangeRef.current = mayChangeDeck
 
+  const reviewRef = useRef(reviewTools)
+  reviewRef.current = reviewTools
+  const review = (name: (typeof REVIEW_TOOL_NAMES)[number]): AgentToolHandler => async invoke => {
+    const handler = reviewRef.current[name]
+    return handler ? handler(invoke) : { content: 'Review is not available here.', isError: true }
+  }
+
   const handlers: Record<string, AgentToolHandler> = {
+    openReview: review('openReview'),
+    getReviewFeedback: review('getReviewFeedback'),
+    viewReviewItem: review('viewReviewItem'),
+    settleReviewNote: review('settleReviewNote'),
     cancelDrawerRequest: async invoke => ({
       content: JSON.stringify(
         await contextRef.current.cancelDrawerRequest(invoke.arguments ?? {}),

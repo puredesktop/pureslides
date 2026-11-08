@@ -427,6 +427,8 @@ export async function frameToDeck(
  * at to compare its slide with a reference. Not an export — nothing is
  * verified or kept; the frame is scaffolding inside the package and goes.
  */
+const SLIDE_PICTURE_MAX_BYTES = 64 * 1024 * 1024
+
 export async function renderSlidePicture(
   packagePath: string,
   html: string,
@@ -435,8 +437,10 @@ export async function renderSlidePicture(
 ): Promise<{ dataUrl: string; width: number; height: number }> {
   const root = packagePath.replace(/\/+$/, '')
   const geometry = geometryFromHtml(html)
-  const framePath = `${root}/.look-frame.html`
-  const dirName = '.look-frames'
+  // Its own for each call: viewSlide can run while the review is making its pictures.
+  const run = Math.random().toString(36).slice(2, 10)
+  const framePath = `${root}/.look-frame-${run}.html`
+  const dirName = `.look-frames-${run}`
   const framesDir = `${root}/${dirName}`
   try {
     await createFolder(root, dirName)
@@ -453,7 +457,7 @@ export async function renderSlidePicture(
       width: geometry.width,
       loadingMessage: `Looking at slide ${index + 1}`,
     })
-    const raw = await readBinaryDataUrl(`${framesDir}/${frameFileName(0)}`)
+    const raw = await readBinaryDataUrl(`${framesDir}/${frameFileName(0)}`, SLIDE_PICTURE_MAX_BYTES)
     const dataUrl = await frameToDeck(raw, captured, geometry)
     const size = deckFrameSize(captured, geometry)
     return { dataUrl, width: size.width, height: size.height }
@@ -466,6 +470,19 @@ export async function renderSlidePicture(
       }
     }
   }
+}
+
+/** One slide's picture saved as a PNG: what the Review room keeps. */
+export async function saveSlidePicture(
+  packagePath: string,
+  html: string,
+  index: number,
+  step: number,
+  outPath: string,
+): Promise<{ width: number; height: number }> {
+  const picture = await renderSlidePicture(packagePath, html, index, step)
+  await writeBinaryFile(outPath, picture.dataUrl.replace(/^data:[^,]*,/, ''))
+  return { width: picture.width, height: picture.height }
 }
 
 export async function exportDeck(request: ExportRequest): Promise<ExportResult> {
