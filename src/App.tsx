@@ -212,9 +212,9 @@ const IDLE_PROGRESS: ExportProgressState = {
   message: '',
 }
 
-/** Make a folder and its missing parents, one createFolder at a time. */
 const REVIEW_WORDS = { noun: 'slide', plural: 'slides' }
 
+/** Make a folder and its missing parents, one createFolder at a time. */
 async function ensureFolderPath(path: string): Promise<void> {
   const parts = path.replace(/\/+$/, '').split('/')
   for (let i = 2; i <= parts.length; i += 1) {
