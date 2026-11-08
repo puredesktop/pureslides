@@ -51,6 +51,17 @@ describe('slide ids for a review', () => {
   })
 })
 
+describe('an odd id', () => {
+  it('stays text when a slide is written over', () => {
+    const held = '$& a"b'
+    const html = deck(`<div data-slide data-slide-id="$&amp; a&quot;b"><h1>Old</h1></div>`)
+    const written = keepSlideId(html, 0, '<div data-slide><h1>New</h1></div>')
+    const back = new DOMParser().parseFromString(written, 'text/html').querySelector('[data-slide]')
+    expect(back?.getAttribute('data-slide-id')).toBe(held)
+    expect(back?.querySelector('h1')?.textContent).toBe('New')
+  })
+})
+
 describe('slides as review items', () => {
   const html = withSlideIds(two)
   const ids = idsOf(html)

@@ -45,7 +45,10 @@ export function keepSlideId(html: string, index: number, replacement: string): s
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const root = rootOf(doc)
   const id = root ? slideElementAt(root, index)?.getAttribute('data-slide-id') : null
-  return id ? replacement.replace(/^(\s*<[a-zA-Z][\w-]*)/, `$1 data-slide-id="${id}"`) : replacement
+  if (!id) return replacement
+  // By hand, not a replacement pattern: an id is the deck's text, and `$&` or a quote in it must stay text.
+  const attribute = ` data-slide-id="${id.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`
+  return replacement.replace(/^(\s*<[a-zA-Z][\w-]*)/, opening => opening + attribute)
 }
 
 /** The slides to review. Refusals teach, since the assistant reads them. */
