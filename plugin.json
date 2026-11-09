@@ -1129,14 +1129,14 @@
               },
               "note": {
                 "type": "string",
-                "description": "What the person is looking at and what to judge, in a sentence or two. Shown above every slide that has no note of its own."
+                "description": "What to look at, in ten words or fewer. One line shows above every slide that has no note of its own; anything longer waits behind a press, and the person acts without reading it."
               },
               "notes": {
                 "type": "object",
                 "additionalProperties": {
                   "type": "string"
                 },
-                "description": "The same for particular slides: their number or item id, and the words. In a later round, say what changed."
+                "description": "The same for particular slides: their number or item id, and ten words or fewer. In a later round, name what to look at; the room already marks where the picture changed."
               }
             },
             "required": []
