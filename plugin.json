@@ -589,6 +589,7 @@
         },
         {
           "name": "describeAsset",
+          "risk": "write",
           "description": "Write what an attached file shows, in one plain sentence. Descriptions are what slides get written from.",
           "inputSchema": {
             "type": "object",
@@ -1044,6 +1045,7 @@
         },
         {
           "name": "setSelection",
+          "risk": "read",
           "description": "Aim the app: choose the slide on screen, tick a set of slides, pick elements, or switch pane. Use it to SHOW the author what you are talking about before you change it.",
           "inputSchema": {
             "type": "object",
