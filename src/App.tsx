@@ -134,9 +134,11 @@ import {
 } from './lib/drawerRequest'
 import { messages, sessions } from '@purescience/platform-ui/bridge/assistants'
 import {
+  agentsOffered,
   updateCurrentWorkspaceTab,
   toggleAgentDrawer,
 } from '@purescience/platform-ui/bridge/workspace'
+import { useHeldCommand } from '@purescience/platform-ui/bridge/react/heldCommand'
 import { deckDesignGuide } from './lib/draftDeck'
 import type { ReferenceImage } from './lib/draftDeck'
 import { mergeMaterial, notesFrom } from './lib/material'
@@ -198,6 +200,9 @@ import { readDeckPackage } from './lib/deckPackage'
 import { readMaterialPreviews } from './lib/materialPreviews'
 import { useDeckResourceOpen } from './hooks/useDeckResourceOpen'
 import { useCompactInRoom } from './hooks/useCompactInRoom'
+import { useDeckReview } from './hooks/useDeckReview'
+import { ReviewRoom } from '@purescience/platform-ui/components/review/ReviewRoom'
+import { keepSlideId } from './lib/reviewDeck'
 import { CompactFrameStyle, CompactNoDeck } from './components/CompactRoom'
 
 const IDLE_PROGRESS: ExportProgressState = {
@@ -206,6 +211,8 @@ const IDLE_PROGRESS: ExportProgressState = {
   unitCount: 0,
   message: '',
 }
+
+const REVIEW_WORDS = { noun: 'slide', plural: 'slides' }
 
 /** Make a folder and its missing parents, one createFolder at a time. */
 async function ensureFolderPath(path: string): Promise<void> {
@@ -2057,6 +2064,19 @@ export function App(): React.ReactElement {
     [editHtml, agentEdit],
   )
 
+  const review = useDeckReview({
+    documentPath: lifecycle.doc.path ?? documentPath,
+    sessionId: meta?.viewport?.sessionId ?? null,
+    title: () => documentRef.current.title,
+    html: () => documentRef.current.html,
+    selection: () => slideSelectionRef.current,
+    saveDeck,
+    giveIds: html => {
+      const landed = editDeck({ transform: () => html, origin: 'manual', rebase: false, baseHash: hashRef.current })
+      return landed.ok
+    },
+  })
+
   const agentContext: DeckAgentToolContext = {
     document,
     hash: deckHash,
@@ -2266,9 +2286,9 @@ export function App(): React.ReactElement {
       setHtml: (index, html, options) =>
         editHtml(
           current => {
-            const wrapped = html.trim().startsWith('<')
+            const wrapped = keepSlideId(current, index, html.trim().startsWith('<')
               ? html
-              : `<div data-slide>${html}</div>`
+              : `<div data-slide>${html}</div>`)
             return setSlideElement(current, index, '', wrapped) === current
               ? addSlide(deleteSlide(current, index), wrapped, index)
               : setSlideElement(current, index, '', wrapped)
@@ -2363,7 +2383,16 @@ export function App(): React.ReactElement {
     stopExport,
   }
   agentContextRef.current = agentContext
-  usePureSlidesAgentTools(true, agentContext, () => !transitions.busy)
+  usePureSlidesAgentTools(true, agentContext, () => !transitions.busy, review.tools)
+
+  // The Review button, the mini view and /review are one function: review.open.
+  useHeldCommand(async command => {
+    if (command !== 'review') return { ok: false, say: `PureSlides has no command "${command}".` }
+    await review.open()
+    return { ok: true, say: 'The review is open.' }
+  })
+  const openReviewRoom = () =>
+    void review.open().catch(cause => setStatus(cause instanceof Error ? cause.message : String(cause)))
 
   const hasOpenDeck =
     documentStarted || documentPath !== null || lifecycle.doc.path !== null
@@ -2655,6 +2684,8 @@ export function App(): React.ReactElement {
             setPresentOpen(true)
           }}
           onExport={() => setExportOpen(true)}
+          onReview={review.state.canStart || review.state.sets.length ? openReviewRoom : undefined}
+          reviewWaiting={review.state.waiting}
           onEditHtml={() => setHtmlOpen(true)}
           onAsk={askAboutSelection}
           asking={asking}
@@ -2708,6 +2739,9 @@ export function App(): React.ReactElement {
         itemNoun="deck"
         itemNounPlural="decks"
       />
+      {review.state.open ? (
+        <ReviewRoom state={review.state} controller={review.controller} words={REVIEW_WORDS} assistant={agentsOffered()} />
+      ) : null}
     </AppFrame>
   )
 }
