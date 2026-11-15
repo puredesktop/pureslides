@@ -414,3 +414,5 @@ carrying the content forward.
 | Put a previous version back | `listRevisions` → `restoreRevision` |
 
 If the user abandons a saved request, cancelDrawerRequest with its requestId. It refuses late commits; stopping the runner alone preserves the request for later recovery.
+
+**Asking first.** `present` is `write` and asks first: it takes over the person's screen.
