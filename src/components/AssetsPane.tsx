@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { DesignBriefImport } from '@purescience/platform-ui/components/common/documents/DesignBriefImport'
 import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
@@ -45,13 +46,43 @@ export function AssetsPane({
   onBrief,
   onDraft,
 }: AssetsPaneProps): React.ReactElement {
+  const [copiedName, setCopiedName] = useState<string | null>(null)
   const undescribed = material.filter(
     item => item.kind === 'image' && !item.description.trim(),
   )
 
+  const copyReference = async (name: string, reference: string): Promise<void> => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(reference)
+      } else {
+        const input = document.createElement('textarea')
+        input.value = reference
+        input.style.position = 'fixed'
+        input.style.opacity = '0'
+        document.body.appendChild(input)
+        input.select()
+        document.execCommand('copy')
+        input.remove()
+      }
+      setCopiedName(name)
+      window.setTimeout(() => {
+        setCopiedName(current => (current === name ? null : current))
+      }, 1800)
+    } catch {
+      /* clipboard blocked */
+    }
+  }
+
   return (
     <Root>
-      <Stage>
+      <Stage
+        onDragOver={event => event.preventDefault()}
+        onDrop={event => {
+          event.preventDefault()
+          if (event.dataTransfer.files.length) onDropFiles([...event.dataTransfer.files])
+        }}
+      >
         <Head>
           <SectionHead>Files</SectionHead>
           <span />
@@ -84,14 +115,26 @@ export function AssetsPane({
             {material.map(item => (
               <Item key={item.name} {...assetAgentRefs(item.name)}>
                 <Thumb $kind={item.kind}>
-                  {previews[item.name] ? (
+                  {item.kind === 'image' && previews[item.name] ? (
                     <ThumbImage src={previews[item.name]} alt={item.name} />
+                  ) : item.kind === 'video' && previews[item.name] ? (
+                    <ThumbVideo src={previews[item.name]} muted preload="metadata" aria-label={item.name} />
                   ) : item.kind === 'image' ? (
                     <ThumbName>{item.name}</ThumbName>
                   ) : (
                     <ThumbKind>{item.kind}</ThumbKind>
                   )}
                 </Thumb>
+                <AssetTitleRow>
+                  <AssetFileName title={item.reference}>{item.name}</AssetFileName>
+                  <CopyRefButton
+                    type="button"
+                    title={`Copy ${item.reference}`}
+                    onClick={() => void copyReference(item.name, item.reference)}
+                  >
+                    {copiedName === item.name ? 'Copied' : 'Copy ref'}
+                  </CopyRefButton>
+                </AssetTitleRow>
                 <DescriptionInput
                   value={item.description}
                   placeholder="What does this show?"
@@ -128,13 +171,7 @@ export function AssetsPane({
             ))}
           </Grid>
         ) : (
-          <Dropzone
-            onDragOver={event => event.preventDefault()}
-            onDrop={event => {
-              event.preventDefault()
-              onDropFiles([...event.dataTransfer.files])
-            }}
-          >
+          <Dropzone>
             <DropTitle>Nothing attached yet</DropTitle>
             <DropBody>
               Screenshots, a logo, a font — whatever the deck is made from.
@@ -265,6 +302,49 @@ const ThumbImage = styled.img`
   height: 100%;
   object-fit: contain;
   display: block;
+`
+
+const ThumbVideo = styled.video`
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+`
+
+const AssetTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const AssetFileName = styled.span`
+  flex: 1;
+  min-width: 0;
+  font-family: var(--platform-typography-font-family-mono, monospace);
+  font-size: 11px;
+  color: var(--platform-colors-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const CopyRefButton = styled.button`
+  flex: none;
+  border: 1px solid var(--pure-chrome-line);
+  border-radius: var(--pure-chrome-radius, 3px);
+  background: var(--pure-chrome-surface);
+  color: var(--platform-colors-text-secondary);
+  padding: 2px 6px;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--platform-colors-text);
+    border-color: ${ACCENT};
+  }
 `
 
 const ThumbKind = styled.span.attrs(chrome('section-label'))`

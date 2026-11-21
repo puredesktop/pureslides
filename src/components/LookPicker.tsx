@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
 import { DECK_LOOKS } from '../lib/deckLooks'
@@ -39,7 +40,9 @@ export function LookPicker({
   houseStyle?: boolean
 }) {
   // The samples are set in the faces the decks get.
-  installAppFonts()
+  useEffect(() => {
+    installAppFonts()
+  }, [])
   return (
     <Choices role="group" aria-label="Presentation style">
       {[...(custom ? [customTile(custom, houseStyle ? 'Your organisation’s house style' : 'Your organisation’s look')] : []), ...DECK_LOOKS].map(look => (
@@ -79,8 +82,8 @@ export function LookPicker({
               move us.
             </strong>
             <Swatches>
-              {[look.accent, look.ink, look.surface].map(color => (
-                <i key={color} style={{ background: color }} />
+              {[look.accent, look.ink, look.surface].map((color, index) => (
+                <i key={`${index}-${color}`} style={{ background: color }} />
               ))}
             </Swatches>
           </Sample>

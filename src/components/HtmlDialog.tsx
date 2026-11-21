@@ -17,14 +17,29 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { styled } from 'styled-components'
+import { containDialogFocus } from './dialogFocus'
 
 /** How long typing has to settle before the source lands as an edit. */
 export const HTML_DIALOG_SETTLE_MS = 500
 
 export interface HtmlCommitResult {
   ok: boolean
+  /** Distinguishes a concurrent stale-base refusal from a markup validation error. */
+  reason?: 'stale' | 'invalid'
   /** The refusal's words when `ok` is false. */
   message?: string
+}
+
+/** Locate the approximate 1-based line number of a structural HTML problem when possible. */
+function locateHtmlHint(source: string): string | null {
+  const lines = source.split('\n')
+  const deckLine = lines.findIndex(line => /data-deck-id|id=["']deck["']/i.test(line))
+  if (deckLine === -1) return 'Line 1: missing <div id="deck" data-deck-id="deck"> root'
+  const slideLine = lines.findIndex(line => /data-slide\b/i.test(line))
+  if (slideLine === -1) return `Line ${deckLine + 1}: deck root has no [data-slide] child`
+  const writeLine = lines.findIndex(line => /\bdocument\.write\b/.test(line))
+  if (writeLine !== -1) return `Line ${writeLine + 1}: remove document.write`
+  return null
 }
 
 interface HtmlDialogProps {
@@ -48,6 +63,7 @@ export function HtmlDialog({
   const [baseHash, setBaseHash] = useState(hash)
   const [dirty, setDirty] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [applied, setApplied] = useState(false)
   const timerRef = useRef<number | null>(null)
   const textRef = useRef(text)
   textRef.current = text
@@ -57,40 +73,86 @@ export function HtmlDialog({
   baseRef.current = baseHash
   // The settle timer fires later than the keystroke that armed it; it must
   // commit against the props as they are THEN, not as they were.
-  const commitRef = useRef<() => void>(() => undefined)
+  const commitRef = useRef<() => boolean>(() => true)
+
+  // Clear stale timers/notices whenever the dialog closes or opens fresh.
+  useEffect(() => {
+    if (!open) {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current)
+        timerRef.current = null
+      }
+      setDirty(false)
+      setNotice(null)
+      setApplied(false)
+      setText(html)
+      setBaseHash(hash)
+      return
+    }
+    setNotice(null)
+    setApplied(false)
+    if (!dirtyRef.current) {
+      setText(html)
+      setBaseHash(hash)
+    }
+  }, [open, html, hash])
 
   // Outside changes (an agent, an ask, an undo) show up while nothing is
   // half-typed; a dirty editor keeps its text and its base, and the commit
   // decides.
   useEffect(() => {
     if (dirtyRef.current) return
-    setText(html)
+    if (textRef.current !== html) setText(html)
     setBaseHash(hash)
   }, [html, hash])
 
-  const commit = useCallback((): void => {
+  const commit = useCallback((): boolean => {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current)
       timerRef.current = null
     }
-    if (!dirtyRef.current) return
+    if (!dirtyRef.current) return true
     const result = onCommit(textRef.current, baseRef.current)
-    setDirty(false)
     if (!result.ok) {
-      setNotice(result.message ?? 'The edit was not applied.')
-      // The editor now shows the current version.
-      setText(html)
-      setBaseHash(hash)
-      return
+      setApplied(false)
+      if (result.reason === 'stale') {
+        setDirty(false)
+        setNotice(result.message ?? 'The deck changed elsewhere; reloaded latest HTML.')
+        setText(html)
+        setBaseHash(hash)
+        return false
+      }
+      // Keep the user's in-progress buffer intact on validation errors so
+      // half-typed markup is never destroyed!
+      const hint = locateHtmlHint(textRef.current)
+      const msg = result.message ?? 'The edit was not applied.'
+      setNotice(hint && !msg.includes(hint) ? `${msg} (${hint})` : msg)
+      return false
     }
+    setDirty(false)
     setNotice(null)
+    setApplied(true)
+    return true
   }, [onCommit, html, hash])
   commitRef.current = commit
+
+  const revert = useCallback((): void => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current)
+      timerRef.current = null
+    }
+    setText(html)
+    setBaseHash(hash)
+    setDirty(false)
+    setNotice(null)
+    setApplied(false)
+  }, [html, hash])
 
   const change = useCallback(
     (next: string): void => {
       setText(next)
       setDirty(true)
+      setApplied(false)
       if (timerRef.current !== null) window.clearTimeout(timerRef.current)
       timerRef.current = window.setTimeout(() => {
         timerRef.current = null
@@ -101,9 +163,14 @@ export function HtmlDialog({
   )
 
   const close = useCallback((): void => {
-    commit()
+    if (!commit()) return
     onClose()
   }, [commit, onClose])
+
+  const discardAndClose = useCallback((): void => {
+    revert()
+    onClose()
+  }, [revert, onClose])
 
   useEffect(() => {
     if (!open) return
@@ -124,16 +191,48 @@ export function HtmlDialog({
   if (!open) return null
   return (
     <Scrim onClick={close}>
-      <Dialog onClick={event => event.stopPropagation()}>
+      <Dialog
+        role="dialog"
+        aria-modal="true"
+        aria-label="The document HTML"
+        onKeyDown={containDialogFocus}
+        onClick={event => event.stopPropagation()}
+      >
         <Head>
           <Title>The document</Title>
           <span style={{ flex: 1 }} />
-          <Note>{dirty ? 'Applies when you pause.' : 'Edits apply when you pause typing.'}</Note>
-          <CloseButton type="button" onClick={close}>
-            Close
-          </CloseButton>
+          <Note role="status">
+            {notice && dirty
+              ? 'Fix the markup error to apply.'
+              : notice
+                ? 'Reloaded latest deck HTML.'
+                : dirty
+                  ? 'Unsaved edits — applies when you pause or click Apply.'
+                  : applied
+                    ? 'Applied to deck.'
+                    : 'Edits apply when you pause typing.'}
+          </Note>
+          {dirty ? (
+            <>
+              <CloseButton type="button" onClick={commit}>
+                Apply
+              </CloseButton>
+              <CloseButton type="button" onClick={revert}>
+                Revert
+              </CloseButton>
+            </>
+          ) : null}
+          {notice && dirty ? (
+            <CloseButton type="button" onClick={discardAndClose}>
+              Discard &amp; Close
+            </CloseButton>
+          ) : (
+            <CloseButton type="button" onClick={close}>
+              Close
+            </CloseButton>
+          )}
         </Head>
-        {notice ? <Notice role="status">{notice}</Notice> : null}
+        {notice ? <Notice role="alert">{notice}</Notice> : null}
         <Editor
           value={text}
           spellCheck={false}

@@ -42,6 +42,8 @@ interface PresentWindowProps {
   from: number
   /** Kept so leaving the room lands the board where the deck got to. */
   onPositionChange?: (slide: number) => void
+  /** Apply recorded per-slide rehearsal seconds back to the deck's data-seconds. */
+  onApplyTimings?: (secondsBySlide: number[]) => void
 }
 
 export function PresentWindow({
@@ -53,6 +55,7 @@ export function PresentWindow({
   previews,
   from,
   onPositionChange,
+  onApplyTimings,
 }: PresentWindowProps): React.ReactElement | null {
   const [at, setAt] = useState({ slide: from, step: 0 })
   const [presenter, setPresenter] = useState(false)
@@ -61,6 +64,8 @@ export function PresentWindow({
   const [idle, setIdle] = useState(false)
   const [now, setNow] = useState(0)
   const [targetInput, setTargetInput] = useState('')
+  const [jumpDisplay, setJumpDisplay] = useState('')
+  const [timingsApplied, setTimingsApplied] = useState(false)
   const [rehearsal, dispatchRehearsal] = useReducer(
     rehearsalReducer,
     null,
@@ -71,6 +76,7 @@ export function PresentWindow({
   const jump = useRef('')
   const pendingRehearsalStart = useRef<number | null>(null)
   const trackedSlide = useRef<number | null>(null)
+  const enteredFullscreenRef = useRef(false)
 
   const current = slides[at.slide]
   const steps = current?.steps ?? 0
@@ -108,7 +114,9 @@ export function PresentWindow({
       : 0
     setAt({ slide: start, step: 0 })
     jump.current = ''
+    setJumpDisplay('')
     setBlacked(false)
+    setTimingsApplied(false)
     const started = performance.now()
     pendingRehearsalStart.current = start
     trackedSlide.current = null
@@ -143,11 +151,19 @@ export function PresentWindow({
    */
   useEffect(() => {
     if (!open) return
+    enteredFullscreenRef.current = false
     const target = document.documentElement
-    void target.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {
-      /* refused, or already fullscreen — the overlay still covers the app */
-    })
+    const req = target.requestFullscreen?.({ navigationUI: 'hide' })
+    void req?.then(
+      () => {
+        enteredFullscreenRef.current = true
+      },
+      () => {
+        /* refused, or already fullscreen — the overlay still covers the app */
+      },
+    )
     return () => {
+      enteredFullscreenRef.current = false
       if (document.fullscreenElement === target) {
         void document.exitFullscreen?.().catch(() => {})
       }
@@ -156,10 +172,19 @@ export function PresentWindow({
 
   // Leaving fullscreen by any route — Esc, the system, a gesture — ends the
   // presentation, so the deck is never left running behind the app chrome.
+  // Only react if THIS presentation actually entered document fullscreen, so
+  // exiting an embedded <video>'s fullscreen never aborts a framed presentation.
   useEffect(() => {
     if (!open) return
     const onChange = (): void => {
-      if (!document.fullscreenElement) onClose()
+      if (document.fullscreenElement === document.documentElement) {
+        enteredFullscreenRef.current = true
+        return
+      }
+      if (enteredFullscreenRef.current && !document.fullscreenElement) {
+        enteredFullscreenRef.current = false
+        onClose()
+      }
     }
     document.addEventListener('fullscreenchange', onChange)
     return () => document.removeEventListener('fullscreenchange', onChange)
@@ -180,29 +205,36 @@ export function PresentWindow({
       if (!open) return false
       if (/^[0-9]$/.test(key)) {
         jump.current += key
+        setJumpDisplay(jump.current)
         return true
       }
       if (key === 'Enter' && jump.current) {
         const wanted = Number(jump.current) - 1
         jump.current = ''
+        setJumpDisplay('')
         if (wanted >= 0 && wanted < slides.length)
           setAt({ slide: wanted, step: 0 })
         return true
       }
-      jump.current = ''
-      if (['ArrowRight', ' ', 'PageDown', 'n'].includes(key)) go(1)
-      else if (['ArrowLeft', 'PageUp', 'p'].includes(key)) go(-1)
+      if (jump.current) {
+        jump.current = ''
+        setJumpDisplay('')
+      }
+      const lower = key.length === 1 ? key.toLowerCase() : key
+      if (['ArrowRight', 'ArrowDown', ' ', 'PageDown', 'n'].includes(lower)) go(1)
+      else if (['ArrowLeft', 'ArrowUp', 'Backspace', 'PageUp', 'p'].includes(lower)) go(-1)
       else if (key === 'Home') setAt({ slide: 0, step: 0 })
       else if (key === 'End') {
         const last = Math.max(0, slides.length - 1)
         setAt({ slide: last, step: slides[last]?.steps ?? 0 })
-      } else if (key === 'b' || key === '.') setBlacked(black => !black)
-      else if (key === 's') setPresenter(view => !view)
-      else if (key === 'a') setArrows(shown => !shown)
-      else if (key === 'r') {
+      } else if (lower === 'b' || lower === '.') setBlacked(black => !black)
+      else if (lower === 's') setPresenter(view => !view)
+      else if (lower === 'a') setArrows(shown => !shown)
+      else if (lower === 'r') {
         const resetAt = performance.now()
         dispatchRehearsal({ type: 'reset', slide: at.slide, slideCount: slides.length, now: resetAt })
         setNow(resetAt)
+        setTimingsApplied(false)
       }
       else if (key === 'Escape') onClose()
       else return false
@@ -213,7 +245,16 @@ export function PresentWindow({
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' && event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable="true"]')) return
+      const inField =
+        event.target instanceof Element &&
+        Boolean(event.target.closest('input, textarea, select, [contenteditable="true"]'))
+      if (inField) {
+        if (event.key === 'Escape' && event.target instanceof HTMLElement) {
+          event.target.blur()
+          event.preventDefault()
+        }
+        return
+      }
       if (handleKey(event.key)) event.preventDefault()
     }
     window.addEventListener('keydown', onKey)
@@ -250,19 +291,30 @@ export function PresentWindow({
     }
   }, [open])
 
+  const hasCurrent = Boolean(current)
   useEffect(() => {
-    if (!open) return
+    if (!open || !hasCurrent) return
     const measure = (): void => {
       const box = stageRef.current?.getBoundingClientRect()
-      if (!box) return
+      if (!box || !box.width || !box.height) return
       setScale(
         Math.min(box.width / geometry.width, box.height / geometry.height),
       )
     }
     measure()
     window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [open, presenter, geometry.width, geometry.height])
+    document.addEventListener('fullscreenchange', measure)
+    let observer: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined' && stageRef.current) {
+      observer = new ResizeObserver(measure)
+      observer.observe(stageRef.current)
+    }
+    return () => {
+      window.removeEventListener('resize', measure)
+      document.removeEventListener('fullscreenchange', measure)
+      observer?.disconnect()
+    }
+  }, [open, hasCurrent, presenter, geometry.width, geometry.height])
 
   const report = useMemo(() => rehearsalReport(rehearsal, now), [rehearsal, now])
   const targetMilliseconds = useMemo(() => {
@@ -281,18 +333,24 @@ export function PresentWindow({
           <PresenterMain>
             <Label>
               Now · slide {at.slide + 1} of {slides.length}
+              {steps ? ` · step ${at.step} of ${steps}` : ''}
+              {blacked ? ' · BLACKOUT (press B)' : ''}
             </Label>
             <PresenterStage ref={stageRef}>
-              <SlideFrame
-                html={html}
-                slide={at.slide}
-                step={at.step}
-                geometry={geometry}
-                width={geometry.width * scale}
-                previews={previews}
-                live
-                onKeyDown={handleKey}
-              />
+              {blacked ? (
+                <EndNote>Audience screen is blacked out. Press B to resume.</EndNote>
+              ) : (
+                <SlideFrame
+                  html={html}
+                  slide={at.slide}
+                  step={at.step}
+                  geometry={geometry}
+                  width={geometry.width * scale}
+                  previews={previews}
+                  live
+                  onKeyDown={handleKey}
+                />
+              )}
             </PresenterStage>
             <Bars>
               {slides.map((slide, index) => (
@@ -302,9 +360,22 @@ export function PresentWindow({
           </PresenterMain>
           <PresenterSide>
             <div>
-              <Label>Next</Label>
+              <Label>
+                {at.step < steps
+                  ? `Next · build step ${at.step + 1} of ${steps}`
+                  : 'Next'}
+              </Label>
               <NextBox>
-                {slides[at.slide + 1] ? (
+                {at.step < steps ? (
+                  <SlideFrame
+                    html={html}
+                    slide={at.slide}
+                    step={at.step + 1}
+                    geometry={geometry}
+                    width={260}
+                    previews={previews}
+                  />
+                ) : slides[at.slide + 1] ? (
                   <SlideFrame
                     html={html}
                     slide={at.slide + 1}
@@ -347,12 +418,28 @@ export function PresentWindow({
                   >
                     {rehearsal.paused ? 'Resume' : 'Pause'}
                   </RehearsalButton>
+                  {onApplyTimings && report.totalMilliseconds >= 1000 ? (
+                    <RehearsalButton
+                      type="button"
+                      onClick={() => {
+                        const seconds = slides.map((slide, index) => {
+                          const ms = report.slides[index]?.milliseconds ?? 0
+                          return ms >= 500 ? Math.max(1, Math.round(ms / 1000)) : slide.seconds
+                        })
+                        onApplyTimings(seconds)
+                        setTimingsApplied(true)
+                      }}
+                    >
+                      {timingsApplied ? 'Timings applied' : 'Apply timings'}
+                    </RehearsalButton>
+                  ) : null}
                   <RehearsalButton
                     type="button"
                     onClick={() => {
                       const resetAt = performance.now()
                       dispatchRehearsal({ type: 'reset', slide: at.slide, slideCount: slides.length, now: resetAt })
                       setNow(resetAt)
+                      setTimingsApplied(false)
                     }}
                   >
                     Reset
@@ -386,7 +473,20 @@ export function PresentWindow({
                   <span>Visits</span>
                 </ReportHead>
                 {slides.map((slide, index) => (
-                  <ReportRow key={slide.index} aria-current={index === at.slide ? 'true' : undefined}>
+                  <ReportRow
+                    key={slide.index}
+                    role="button"
+                    tabIndex={0}
+                    aria-current={index === at.slide ? 'true' : undefined}
+                    onClick={() => setAt({ slide: index, step: 0 })}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        setAt({ slide: index, step: 0 })
+                      }
+                    }}
+                  >
                     <ReportSlide>
                       <ReportNumber>{index + 1}</ReportNumber>
                       <ReportTitle title={slide.headline || `Slide ${index + 1}`}>
@@ -421,7 +521,8 @@ export function PresentWindow({
       <Rail style={{ opacity: idle ? 0 : 1 }}>
         <Progress style={{ width: `${progress}%` }} />
       </Rail>
-      <Counter style={{ opacity: idle ? 0 : 1 }}>
+      <Counter style={{ opacity: idle && !jumpDisplay ? 0 : 1 }}>
+        {jumpDisplay ? <span>Go to slide {jumpDisplay}⏎</span> : null}
         {steps ? (
           <Dots>
             {Array.from({ length: steps + 1 }, (_unused, index) => (

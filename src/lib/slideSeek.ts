@@ -111,7 +111,8 @@ function fitSlide(el, boxW, boxH) {
     // A layer that declares itself the background is allowed to sit under
     // everything — a full-bleed image and the scrim over it are the design.
     if (node.hasAttribute('data-bg')) return false;
-    if (node.tagName === 'IMG' || node.tagName === 'SVG') return true;
+    var tag = node.tagName ? node.tagName.toUpperCase() : '';
+    if (tag === 'IMG' || tag === 'SVG') return true;
     for (var c = 0; c < node.childNodes.length; c++) {
       var child = node.childNodes[c];
       if (child.nodeType === 3 && child.nodeValue && child.nodeValue.trim()) {
@@ -316,7 +317,8 @@ function applyStepsIn(root, i, step) {
   if (!slide) return;
   var built = slide.querySelectorAll('[data-step]');
   for (var n = 0; n < built.length; n++) {
-    var wanted = parseFloat(built[n].getAttribute('data-step'));
+    var raw = parseFloat(built[n].getAttribute('data-step'));
+    var wanted = isFinite(raw) ? Math.floor(raw) : raw;
     var on = !isFinite(wanted) || wanted <= step;
     built[n].classList.toggle('pv-in', on);
     built[n].classList.toggle('pv-out', !on);
@@ -329,7 +331,7 @@ function stepsOf(slide) {
   var built = slide.querySelectorAll('[data-step]');
   var highest = 0;
   for (var n = 0; n < built.length; n++) {
-    var value = parseFloat(built[n].getAttribute('data-step'));
+    var value = Math.floor(parseFloat(built[n].getAttribute('data-step')));
     if (isFinite(value) && value > highest) highest = value;
   }
   return highest;
@@ -736,7 +738,9 @@ const PICKING = `
     // typing into a container would eat its elements.
     if (!(event.shiftKey || event.metaKey || event.ctrlKey) &&
         el && el.classList && el.classList.contains('__pv-picked') &&
-        el.children.length === 0 && !/^(IMG|VIDEO|AUDIO|IFRAME|INPUT|HR|BR)$/.test(el.tagName)) {
+        el.children.length === 0 &&
+        !el.hasAttribute('data-image-slot') &&
+        !/^(IMG|VIDEO|AUDIO|IFRAME|INPUT|HR|BR|SVG|CANVAS|SELECT|TEXTAREA|SOURCE|TRACK)$/.test(el.tagName.toUpperCase())) {
       startEdit(el, found);
       return;
     }
@@ -756,6 +760,8 @@ const PICKING = `
     var clone = el.cloneNode(true);
     clone.classList.remove('__pv-picked');
     clone.classList.remove('__pv-hover');
+    clone.classList.remove('pv-in');
+    clone.classList.remove('pv-out');
     if (!clone.classList.length) clone.removeAttribute('class');
     clone.removeAttribute('contenteditable');
     return clone.outerHTML;

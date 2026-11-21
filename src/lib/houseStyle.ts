@@ -141,9 +141,14 @@ export const MAX_SAMPLE_IMAGES = 12
 export function pickSlideImages(files: readonly string[], indexes?: readonly number[]): string[] {
   const numbered = files
     .map(file => ({ file, n: Number(/slide-(\d+)\.png$/i.exec(file)?.[1]) }))
-    .filter(entry => Number.isInteger(entry.n) && entry.n > 0)
+    .filter(entry => Number.isInteger(entry.n) && entry.n >= 0)
     .sort((a, b) => a.n - b.n)
-  const wanted = indexes?.length ? numbered.filter(entry => indexes.includes(entry.n - 1)) : numbered
+  if (!numbered.length) return []
+  // `captureFrames` writes 0-based `slide-00000.png`; some callers pass 1-based `slide-1.png`.
+  const zeroBased = numbered[0].n === 0
+  const wanted = indexes?.length
+    ? numbered.filter(entry => indexes.includes(zeroBased ? entry.n : entry.n - 1))
+    : numbered
   return wanted.slice(0, MAX_SAMPLE_IMAGES).map(entry => entry.file)
 }
 

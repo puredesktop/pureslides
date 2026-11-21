@@ -21,6 +21,7 @@
  */
 import { DECK_ASSETS_DIR } from '../constants'
 import { BUNDLED_FONT_URLS } from '../fonts/urls'
+import { resolveSafeAssetSubpath } from './sanitizeDeck'
 
 /** Per-asset ceiling for inlining a picture into the preview. */
 export const PREVIEW_ASSET_MAX_BYTES = 12 * 1024 * 1024
@@ -47,13 +48,9 @@ function assetReference(path: string, start: number, unquoted = false): AssetRef
   // Attribute and function names ignore case; package paths do not.
   if (!/^(?:\.\/)?assets\//.test(path)) return null
   const raw = path.replace(/^(?:\.\/)?assets\//, '').split(/[?#]/)[0]
-  let name = raw
-  try {
-    name = decodeURIComponent(raw)
-  } catch {
-    /* keep it as written */
-  }
-  return { path, raw, name, start, end: start + path.length, unquoted }
+  const safeName = resolveSafeAssetSubpath(path)
+  if (!safeName) return null
+  return { path, raw, name: safeName, start, end: start + path.length, unquoted }
 }
 
 function* cssReferences(css: string, offset: number): Generator<AssetReference> {
@@ -145,8 +142,8 @@ export async function resolvePreviewAssets(
   const inlined: PreviewAssetMap = {}
   const issues: PreviewAssetIssue[] = []
   for (const name of referencedAssetNames(html)) {
-    const known = options.known?.[name]
-    if (known) {
+    const known = options.known && Object.hasOwn(options.known, name) ? options.known[name] : undefined
+    if (typeof known === 'string' && known) {
       inlined[name] = known
       continue
     }
@@ -182,8 +179,12 @@ export function inlineAssetUrls(html: string, previews: PreviewAssetMap): string
   let result = ''
   let cursor = 0
   for (const reference of assetReferences(html)) {
-    const data = previews[reference.name] ?? previews[reference.raw]
-    if (!data) continue
+    const data = Object.hasOwn(previews, reference.name)
+      ? previews[reference.name]
+      : Object.hasOwn(previews, reference.raw)
+        ? previews[reference.raw]
+        : undefined
+    if (typeof data !== 'string' || !data) continue
     // Data URLs contain '=' padding, so unquoted HTML values need quotes.
     const value = reference.unquoted ? `"${data}"` : data
     result += html.slice(cursor, reference.start) + value

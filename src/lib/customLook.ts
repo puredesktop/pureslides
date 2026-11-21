@@ -21,6 +21,7 @@
 import { bundledFamily, familyStack } from '../fonts/registry'
 import { parseStyle } from './inlineStyle'
 import { lookTokens, typeScale, MIN_TEXT_PX } from './deckLooks'
+import { resolveSafeAssetSubpath } from './sanitizeDeck'
 
 export const CUSTOM_LOOK_ID = 'custom'
 
@@ -218,7 +219,8 @@ export function customLook(input: CustomLookInput): CustomLookSpec {
   let motif: CustomLookSpec['motif']
   if (input.motif) {
     const file = input.motif.file.trim()
-    if (!MOTIF_FILE.test(file)) throw new CustomLookError(`the motif must be a picture in the package's assets (assets/…png, jpg, webp or svg), not "${file}"`)
+    if (!MOTIF_FILE.test(file) || !resolveSafeAssetSubpath(file))
+      throw new CustomLookError(`the motif must be a picture in the package's assets (assets/…png, jpg, webp or svg), not "${file}"`)
     const opacity = input.motif.opacity ?? 1
     if (!Number.isFinite(opacity) || opacity <= 0 || opacity > 1) throw new CustomLookError('motif opacity must be above 0 and at most 1')
     const placement = input.motif.placement ?? 'cover'
@@ -228,7 +230,8 @@ export function customLook(input: CustomLookInput): CustomLookSpec {
 
   const faces = (input.faces ?? []).map(face => {
     if (!FAMILY.test(face.family)) throw new CustomLookError(`brand face family "${face.family}" is not a font-family name`)
-    if (!FACE_FILE.test(face.file)) throw new CustomLookError(`brand face ${face.family} must be a woff2 in assets/fonts/brand/`)
+    if (!FACE_FILE.test(face.file) || !resolveSafeAssetSubpath(face.file))
+      throw new CustomLookError(`brand face ${face.family} must be a woff2 in assets/fonts/brand/`)
     if (!WEIGHT.test(face.weight)) throw new CustomLookError(`brand face ${face.family} weight must be like 700 or 100 900`)
     return { family: face.family, weight: face.weight, style: face.style === 'italic' ? 'italic' : 'normal', file: face.file } as BrandFace
   })
@@ -239,8 +242,10 @@ export function customLook(input: CustomLookInput): CustomLookSpec {
 /** The CSS font-family stack for a face: bundled, the brand's own, or (said plainly by `fontNotes`) a fallback. */
 function stack(name: string, faces: BrandFace[], generic: 'sans-serif' | 'monospace'): string {
   if (bundledFamily(name)) return familyStack(name)
-  if (faces.some(face => face.family.toLowerCase() === name.toLowerCase()))
-    return `'${name}', ${generic === 'monospace' ? 'ui-monospace, monospace' : 'system-ui, sans-serif'}`
+  if (faces.some(face => face.family.toLowerCase() === name.toLowerCase())) {
+    const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+    return `'${safeName}', ${generic === 'monospace' ? 'ui-monospace, monospace' : 'system-ui, sans-serif'}`
+  }
   return familyStack(name)
 }
 
@@ -345,7 +350,12 @@ export function deckFaces(root: Element | null): BrandFace[] {
   }
 }
 
-const first = (value: string | undefined) => value?.split(',')[0]?.trim().replace(/^["']|["']$/g, '') ?? ''
+const first = (value: string | undefined) =>
+  value
+    ?.split(',')[0]
+    ?.trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/\\'/g, "'") ?? ''
 
 /** The custom look a deck wears, read back from its root; null for a stock look or no deck. */
 export function customLookFromHtml(html: string): CustomLookSpec | null {
@@ -362,7 +372,8 @@ export function customLookFromHtml(html: string): CustomLookSpec | null {
     const value = Number.parseFloat(token(name) ?? '')
     return Number.isFinite(value) ? value : undefined
   }
-  const motifUrl = /url\("?([^")]+)"?\)/.exec(token('motif') ?? '')?.[1]
+  const motifMatch = /url\(\s*(?:"([^"]+)"|'([^']+)'|([^)"'\s]+))\s*\)/.exec(token('motif') ?? '')
+  const motifUrl = motifMatch?.[1] ?? motifMatch?.[2] ?? motifMatch?.[3]
   const sizes = { body: number('size-body'), lead: number('size-lead') }
   try {
     return customLook({

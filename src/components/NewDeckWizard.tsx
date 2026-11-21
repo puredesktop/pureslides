@@ -8,7 +8,7 @@ import { DesignBriefImport } from '@purescience/platform-ui/components/common/do
  * you on the board with the starter slide. Either way the answers are
  * stored in the package — the wizard is a doorway, not a place.
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
 import { LookPicker } from './LookPicker'
@@ -82,6 +82,11 @@ export function NewDeckWizard({
   onSkip,
   onCancel,
 }: NewDeckWizardProps): React.ReactElement | null {
+  const [slideCountDraft, setSlideCountDraft] = useState(String(slideCount))
+  useEffect(() => {
+    setSlideCountDraft(String(slideCount))
+  }, [slideCount])
+
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent): void => {
@@ -129,7 +134,7 @@ export function NewDeckWizard({
             <Files>
               {material.map(item => (
                 <FileChip key={item.name} title={item.name}>
-                  {previews[item.name] ? (
+                  {item.kind === 'image' && previews[item.name] ? (
                     <FileThumb src={previews[item.name]} alt="" />
                   ) : (
                     <FileKind>{item.kind}</FileKind>
@@ -173,8 +178,27 @@ export function NewDeckWizard({
               type="number"
               min={1}
               max={120}
-              value={slideCount}
-              onChange={event => onSlideCount(Number(event.currentTarget.value))}
+              value={slideCountDraft}
+              onChange={event => {
+                const raw = event.currentTarget.value
+                setSlideCountDraft(raw)
+                const trimmed = raw.trim()
+                if (!trimmed) return
+                const parsed = Math.floor(Number(trimmed))
+                if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 120) {
+                  onSlideCount(parsed)
+                }
+              }}
+              onBlur={() => {
+                const parsed = Math.floor(Number(slideCountDraft.trim()))
+                if (Number.isFinite(parsed) && parsed >= 1) {
+                  const clamped = Math.min(120, Math.max(1, parsed))
+                  onSlideCount(clamped)
+                  setSlideCountDraft(String(clamped))
+                } else {
+                  setSlideCountDraft(String(slideCount))
+                }
+              }}
             />
           </Field>
           <Field>

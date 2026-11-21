@@ -115,8 +115,10 @@ const MOTIF_RULES = `:where([data-deck-id]) > :where([data-slide]) { isolation: 
 function brandFaceRules(faces: BrandFace[]): string {
   return faces
     .map(
-      face =>
-        `@font-face { font-family: '${face.family}'; src: url("${face.file}") format("woff2"); font-weight: ${face.weight}; font-style: ${face.style}; font-display: block; }`,
+      face => {
+        const safeFamily = face.family.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+        return `@font-face { font-family: '${safeFamily}'; src: url("${face.file}") format("woff2"); font-weight: ${face.weight}; font-style: ${face.style}; font-display: block; }`
+      },
     )
     .join('\n')
 }

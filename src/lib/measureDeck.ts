@@ -20,6 +20,7 @@ import {
 } from '@purescience/platform-ui/editing'
 import { hashDeck } from './deckDoor'
 import { slideFingerprint, type SlideEvidence } from './deckVerification'
+import { sanitizeForSameOriginMeasure } from './sanitizeDeck'
 import { shownSlideHtml } from './slideSeek'
 import type { DeckGeometry } from './deckDocument'
 import type { Slide } from './slides'
@@ -43,10 +44,10 @@ export async function measureDeck(
    */
   viewHtml: string = html,
 ): Promise<Record<number, SlideEvidence> | null> {
-  const mounted = await mountMeasuringFrame(shownSlideHtml(viewHtml, 0, 0), {
-    // Scripts ON, because the fit IS a script; same-origin so the result is
-    // read straight off the frame's DOM. The document is the author's own
-    // deck, the same one the board already runs with scripts allowed.
+  const safeViewHtml = sanitizeForSameOriginMeasure(viewHtml)
+  const mounted = await mountMeasuringFrame(shownSlideHtml(safeViewHtml, 0, 0), {
+    // Scripts ON only for PureSlides' injected seek script; all deck scripts
+    // and inline event handlers are stripped before mounting same-origin.
     sandbox: 'allow-same-origin allow-scripts',
     width: geometry.width,
     height: geometry.height,
