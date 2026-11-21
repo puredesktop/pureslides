@@ -12,6 +12,7 @@
 import { afterLayout, mountMeasuringFrame } from '@purescience/platform-ui/editing'
 import { DECK_ASSETS_DIR } from '../constants'
 import { inlineAssetUrls, type PreviewAssetMap } from './packageAssets'
+import { resolveSafePackageRelativePath, sanitizeForSameOriginMeasure } from './sanitizeDeck'
 import { shownSlideHtml } from './slideSeek'
 import type { DeckGeometry } from './deckDocument'
 import type { Slide } from './slides'
@@ -59,7 +60,7 @@ export function packageSource(src: string, previews: PreviewAssetMap): string | 
     return name ? `${DECK_ASSETS_DIR}/${name}` : null
   }
   if (/^[a-z][a-z0-9+.-]*:/i.test(src)) return null
-  return src.replace(/^\.\//, '')
+  return resolveSafePackageRelativePath(src)
 }
 
 export async function measureVideoPlacements(
@@ -70,7 +71,8 @@ export async function measureVideoPlacements(
   previews: PreviewAssetMap = {},
 ): Promise<VideoPlacement[]> {
   if (!hasVideo(html)) return []
-  const mounted = await mountMeasuringFrame(shownSlideHtml(inlineAssetUrls(html, previews), 0, 0), {
+  const safeHtml = sanitizeForSameOriginMeasure(inlineAssetUrls(html, previews))
+  const mounted = await mountMeasuringFrame(shownSlideHtml(safeHtml, 0, 0), {
     sandbox: 'allow-same-origin allow-scripts',
     width: geometry.width,
     height: geometry.height,

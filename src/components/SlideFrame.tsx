@@ -108,6 +108,11 @@ export function SlideFrame({
       ),
     [html, shown],
   )
+  // Track which html/shown the loaded iframe actually rendered so a teardown
+  // blur/layout event from an outgoing iframe is never tagged with newer html.
+  const pendingDocRef = useRef({ html, shown })
+  const activeDocRef = useRef({ html, shown })
+  pendingDocRef.current = { html, shown }
   const highlightKey = highlight.join('|')
 
   const post = useCallback((message: unknown) => {
@@ -134,9 +139,12 @@ export function SlideFrame({
         | undefined
       if (data?.type === 'pureslides:key' && typeof data.key === 'string')
         onKeyDown?.(data.key)
-      if (data?.type === 'pureslides:ready') setReady(count => count + 1)
+      if (data?.type === 'pureslides:ready') {
+        activeDocRef.current = pendingDocRef.current
+        setReady(count => count + 1)
+      }
       if (data?.type === 'pureslides:layout') {
-        onLayout?.(data.slide ?? 0, layoutReportFrom(data), html)
+        onLayout?.(data.slide ?? 0, layoutReportFrom(data), activeDocRef.current.html)
       }
       if (data?.type === 'pureslides:clear-selection') onClearSelection?.()
       if (data?.type === 'pureslides:picked' && typeof data.path === 'string') {
@@ -152,22 +160,23 @@ export function SlideFrame({
         typeof data.path === 'string' &&
         typeof (data as { outerHtml?: unknown }).outerHtml === 'string'
       ) {
+        const rendered = activeDocRef.current
         // Typed into the inlined DOM: the package paths go back in before
         // the edit lands, or it would commit base64 into the document.
         onEdit?.(
           data.slideIndex ?? 0,
           data.path,
           restoreEmbeddedVideoPreview(
-            deinlineAssetUrls((data as { outerHtml: string }).outerHtml, shown)
+            deinlineAssetUrls((data as { outerHtml: string }).outerHtml, rendered.shown)
               .html,
           ),
-          html,
+          rendered.html,
         )
       }
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [onPick, onClearSelection, onEdit, onLayout, onKeyDown, html, shown])
+  }, [onPick, onClearSelection, onEdit, onLayout, onKeyDown])
 
   // `ready` is in every dep list: a frame that has just loaded has not seen
   // anything sent before it existed.

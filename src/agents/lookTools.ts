@@ -37,6 +37,7 @@ import {
   type MotifPlacement,
 } from '../lib/customLook'
 import { slidesFromHtml } from '../lib/slides'
+import { resolveSafePackageRelativePath } from '../lib/sanitizeDeck'
 import type { DeckAgentToolContext, EditOptions } from './catalog'
 
 const IMAGE_MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml' }
@@ -292,7 +293,14 @@ export async function makeMotifHandler(
   const sourceImages: { base64: string; mimeType: string; name?: string }[] = []
   const reference = str(args.reference)
   if (reference) {
-    const path = reference.startsWith('/') ? reference : `${context.documentPath}/${packageAsset(reference)}`
+    let path: string
+    if (reference.startsWith('/')) {
+      path = reference
+    } else {
+      const safeRel = resolveSafePackageRelativePath(packageAsset(reference))
+      if (!safeRel) return agentToolErrorContent(`invalid reference path "${reference}"`)
+      path = `${context.documentPath}/${safeRel}`
+    }
     try {
       const read = await context.files.readBase64(path, 12 * 1024 * 1024)
       sourceImages.push({ base64: read.base64, mimeType: read.mimeType ?? mimeOf(path), name: baseName(path) })
@@ -370,10 +378,15 @@ export async function viewSlideHandler(
   const compareWith = str(args.compareWith) ?? (args.compare === false ? undefined : referenceAssets(context)[0])
   let compared: string | null = null
   if (compareWith) {
-    const path = compareWith.startsWith('/') ? compareWith : `${context.documentPath}/${packageAsset(compareWith)}`
+    const path = compareWith.startsWith('/')
+      ? compareWith
+      : (() => {
+          const safeRel = resolveSafePackageRelativePath(packageAsset(compareWith))
+          return safeRel ? `${context.documentPath}/${safeRel}` : null
+        })()
     try {
-      const mimeType = read0(path)
-      if (mimeType) {
+      const mimeType = path ? read0(path) : null
+      if (path && mimeType) {
         const read = await context.files.readBase64(path, 12 * 1024 * 1024)
         images.push({ mimeType, data: read.base64 })
         compared = path

@@ -8,12 +8,18 @@
  * before. A restore snapshots the current deck first, so it is itself
  * undoable.
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { styled } from 'styled-components'
 import { ACCENT } from '../constants'
 import { revisionLabel, type RevisionEntry } from '@purescience/platform-ui/editing'
 import { DECK_REASON_LABELS } from '../lib/deckDoor'
 import { revisionAgentRefs } from '../agentRefs'
+import { containDialogFocus } from './dialogFocus'
+
+export interface RevisionPreview {
+  slides: number
+  headlines: string[]
+}
 
 interface HistoryDialogProps {
   open: boolean
@@ -21,7 +27,8 @@ interface HistoryDialogProps {
   entries: RevisionEntry[]
   /** Visible text characters of the deck as it is now — the yardstick each entry is compared to. */
   currentTextChars: number
-  onRestore: (file: string) => void
+  onRestore: (file: string) => void | Promise<boolean>
+  onPreview?: (file: string) => Promise<RevisionPreview | null>
   busy: boolean
 }
 
@@ -31,10 +38,25 @@ export function HistoryDialog({
   entries,
   currentTextChars,
   onRestore,
+  onPreview,
   busy,
 }: HistoryDialogProps): React.ReactElement | null {
+  const [previewFile, setPreviewFile] = useState<string | null>(null)
+  const [previews, setPreviews] = useState<Record<string, RevisionPreview | null>>({})
+  const [loadingPreview, setLoadingPreview] = useState<string | null>(null)
+  const [confirmFile, setConfirmFile] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<string | null>(null)
+
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setConfirmFile(null)
+      setPreviewFile(null)
+      setPreviews({})
+      setFeedback(null)
+      return
+    }
+    setConfirmFile(null)
+    setFeedback(null)
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose()
     }
@@ -44,9 +66,51 @@ export function HistoryDialog({
 
   if (!open) return null
   const now = Date.now()
+
+  const togglePreview = async (file: string): Promise<void> => {
+    if (previewFile === file) {
+      setPreviewFile(null)
+      return
+    }
+    setPreviewFile(file)
+    if (!onPreview || previews[file]) return
+    setLoadingPreview(file)
+    try {
+      const info = await onPreview(file)
+      if (info) {
+        setPreviews(current => ({ ...current, [file]: info }))
+      }
+    } catch {
+      /* transient error: leave uncached so user can retry */
+    } finally {
+      setLoadingPreview(current => (current === file ? null : current))
+    }
+  }
+
+  const handleRestore = async (file: string): Promise<void> => {
+    try {
+      const result = await onRestore(file)
+      if (result === false) {
+        setFeedback('Could not restore that version.')
+      } else {
+        setFeedback('Version restored. The previous state was saved to history.')
+      }
+    } catch {
+      setFeedback('Could not restore that version.')
+    } finally {
+      setConfirmFile(null)
+    }
+  }
+
   return (
     <Scrim onClick={onClose}>
-      <Dialog onClick={event => event.stopPropagation()}>
+      <Dialog
+        role="dialog"
+        aria-modal="true"
+        aria-label="Deck history"
+        onKeyDown={containDialogFocus}
+        onClick={event => event.stopPropagation()}
+      >
         <Head>
           <Title>History</Title>
           <span style={{ flex: 1 }} />
@@ -59,28 +123,87 @@ export function HistoryDialog({
           Each entry is the deck as it was before a rewrite. Restore puts it back —
           the deck as it is now is kept first, so a restore can itself be undone.
         </Note>
+        {feedback ? <Note role="status">{feedback}</Note> : null}
         {entries.length ? (
           <List>
             {entries.map(entry => {
               const delta = entry.textChars - currentTextChars
+              const expanded = previewFile === entry.file
+              const preview = previews[entry.file]
+              const confirming = confirmFile === entry.file
               return (
-                <Row
-                  key={entry.file}
-                  {...revisionAgentRefs(entry.file, revisionLabel(entry, now, DECK_REASON_LABELS))}
-                >
-                  <RowText>
-                    <RowLabel>{revisionLabel(entry, now, DECK_REASON_LABELS)}</RowLabel>
-                    <RowMeta>
-                      {entry.textChars.toLocaleString()} characters of text
-                      {delta > 0 ? ` · ${delta.toLocaleString()} more than now` : ''}
-                      {delta < 0 ? ` · ${Math.abs(delta).toLocaleString()} fewer than now` : ''}
-                      {entry.scope ? ` · ${entry.scope}` : ''}
-                    </RowMeta>
-                  </RowText>
-                  <RestoreButton type="button" disabled={busy} onClick={() => onRestore(entry.file)}>
-                    Restore
-                  </RestoreButton>
-                </Row>
+                <EntryBlock key={entry.file}>
+                  <Row
+                    {...revisionAgentRefs(entry.file, revisionLabel(entry, now, DECK_REASON_LABELS))}
+                  >
+                    <RowText>
+                      <RowLabel>{revisionLabel(entry, now, DECK_REASON_LABELS)}</RowLabel>
+                      <RowMeta>
+                        {entry.textChars.toLocaleString()} characters of text
+                        {delta > 0 ? ` · ${delta.toLocaleString()} more than now` : ''}
+                        {delta < 0 ? ` · ${Math.abs(delta).toLocaleString()} fewer than now` : ''}
+                        {entry.scope ? ` · ${entry.scope}` : ''}
+                      </RowMeta>
+                    </RowText>
+                    {onPreview ? (
+                      <CloseButton type="button" onClick={() => void togglePreview(entry.file)}>
+                        {expanded ? 'Hide' : 'Inspect'}
+                      </CloseButton>
+                    ) : null}
+                    {confirming ? (
+                      <>
+                        <RestoreButton
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void handleRestore(entry.file)}
+                        >
+                          Confirm restore
+                        </RestoreButton>
+                        <CloseButton type="button" onClick={() => setConfirmFile(null)}>
+                          Cancel
+                        </CloseButton>
+                      </>
+                    ) : (
+                      <RestoreButton
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setConfirmFile(entry.file)
+                          if (onPreview && !expanded) void togglePreview(entry.file)
+                        }}
+                      >
+                        Restore
+                      </RestoreButton>
+                    )}
+                  </Row>
+                  {expanded ? (
+                    <PreviewBox>
+                      {loadingPreview === entry.file ? (
+                        <RowMeta>Loading version summary…</RowMeta>
+                      ) : preview ? (
+                        <>
+                          <RowMeta>
+                            {preview.slides} {preview.slides === 1 ? 'slide' : 'slides'}
+                          </RowMeta>
+                          {preview.headlines.length ? (
+                            <PreviewList>
+                              {preview.headlines.slice(0, 6).map((headline, idx) => (
+                                <li key={idx}>
+                                  {idx + 1}. {headline || '(Untitled slide)'}
+                                </li>
+                              ))}
+                              {preview.headlines.length > 6 ? (
+                                <li>+{preview.headlines.length - 6} more slides</li>
+                              ) : null}
+                            </PreviewList>
+                          ) : null}
+                        </>
+                      ) : (
+                        <RowMeta>Preview unavailable for this revision.</RowMeta>
+                      )}
+                    </PreviewBox>
+                  ) : null}
+                </EntryBlock>
               )
             })}
           </List>
@@ -204,4 +327,27 @@ const Empty = styled.div`
   padding: 18px 0;
   font-size: 13px;
   color: var(--platform-colors-text-secondary);
+`
+
+const EntryBlock = styled.div`
+  border-bottom: 1px solid var(--platform-colors-border);
+`
+
+const PreviewBox = styled.div`
+  padding: 6px 10px 10px;
+  background: var(--platform-colors-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const PreviewList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--platform-colors-text);
 `

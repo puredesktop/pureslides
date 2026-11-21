@@ -141,11 +141,7 @@ function readableText(element: Element): string {
   clone.querySelectorAll('style, script, [data-notes]').forEach(node => {
     node.remove()
   })
-  return clone.innerHTML
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+  return wordsOf(clone)
 }
 
 /** The highest `data-step` inside a slide — how many presses it takes. */
@@ -164,13 +160,15 @@ function readSlide(element: Element, index: number): Slide {
   const image = element.querySelector('img[src]')
   const notes = element.querySelector('[data-notes]')
   const seconds = Number(element.getAttribute('data-seconds'))
+  const video = element.querySelector('video')
+  const videoSrc = video?.getAttribute('src') || video?.querySelector('source')?.getAttribute('src') || ''
   return {
     index,
     headline: textOf(heading) || readableText(element).slice(0, 60),
     support: heading ? textOf(support) : '',
     notes: textOf(notes),
     block: element.getAttribute('data-block') ?? '',
-    asset: image?.getAttribute('src') ?? element.querySelector('video')?.getAttribute('src') ?? '',
+    asset: image?.getAttribute('src') ?? videoSrc,
     steps: stepsIn(element),
     seconds:
       Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_SLIDE_SECONDS,
@@ -308,6 +306,53 @@ export function deleteSlide(html: string, index: number): string {
   return serialize(doc)
 }
 
+/**
+ * Replace slide `index` in place — works cleanly on 1-slide decks (unlike
+ * delete-then-add) and preserves multiple top-level elements inside a wrapper.
+ */
+export function replaceSlideHtml(
+  html: string,
+  index: number,
+  slideHtml: string,
+): string {
+  const doc = parse(html)
+  if (!doc) return html
+  const root = rootOf(doc)
+  if (!root) return html
+  const holder = doc.createElement('div')
+  holder.innerHTML = slideHtml.trim()
+  let next: Element | null = null
+  if (holder.children.length === 1 && holder.firstElementChild!.hasAttribute('data-slide')) {
+    next = holder.firstElementChild!
+  } else if (holder.childNodes.length > 0) {
+    const wrapper = doc.createElement('div')
+    wrapper.setAttribute('data-slide', '')
+    while (holder.firstChild) wrapper.appendChild(holder.firstChild)
+    next = wrapper
+  }
+  if (!next) return html
+
+  const slides = [...root.children].filter(child =>
+    child.matches(SLIDE_SELECTOR),
+  )
+  if (slides.length) {
+    const target = slides[index]
+    if (!target) return html
+    const existingSlideId = target.getAttribute('data-slide-id')
+    if (existingSlideId && !next.hasAttribute('data-slide-id')) {
+      next.setAttribute('data-slide-id', existingSlideId)
+    }
+    target.replaceWith(next)
+    return serialize(doc)
+  }
+  if (index === 0 && root.children.length) {
+    root.textContent = ''
+    root.appendChild(next)
+    return serialize(doc)
+  }
+  return html
+}
+
 export interface SlideEdit {
   headline?: string
   support?: string
@@ -364,11 +409,26 @@ export function setSlideContent(
       const video = slide.querySelector('video')
       if (video) {
         video.setAttribute('src', patch.asset)
+        video.querySelectorAll('source').forEach(node => node.remove())
         slide.querySelectorAll('[data-video-empty]').forEach(node => node.remove())
+      } else {
+        const slot = slide.querySelector('[data-image-slot]')
+        if (slot) {
+          slot.textContent = ''
+          slot.removeAttribute('data-image-slot')
+          const nextImg = doc.createElement('img')
+          nextImg.setAttribute('src', patch.asset)
+          nextImg.setAttribute('alt', '')
+          nextImg.setAttribute(
+            'style',
+            'width: 100%; height: 100%; object-fit: cover; display: block',
+          )
+          slot.appendChild(nextImg)
+        }
       }
     }
   }
-  if (patch.seconds !== undefined && patch.seconds > 0) {
+  if (patch.seconds !== undefined && Number.isFinite(patch.seconds) && patch.seconds > 0) {
     slide.setAttribute('data-seconds', String(patch.seconds))
   }
   return serialize(doc)
@@ -508,9 +568,27 @@ export interface PickedElementInfo {
   /** True when its content is text and nothing else — safe to edit as text. */
   editableText: boolean
   isImage: boolean
+  /** True when this element is an image placeholder slot ready to receive a picture. */
+  isImagePlaceholder?: boolean
   /** The build step it arrives on; 0 means on from the start. */
   step: number
 }
+
+const NON_TEXT_TAGS = new Set([
+  'IMG',
+  'VIDEO',
+  'AUDIO',
+  'IFRAME',
+  'INPUT',
+  'SELECT',
+  'TEXTAREA',
+  'HR',
+  'BR',
+  'CANVAS',
+  'SVG',
+  'SOURCE',
+  'TRACK',
+])
 
 /**
  * What a picked element IS, so the rail can offer the right control.
@@ -531,14 +609,22 @@ export function readElement(
   const element = slide ? elementAtPath(slide, path) : null
   if (!element) return null
   const step = Number(element.getAttribute('data-step'))
-  const isImage = element.tagName === 'IMG'
+  const upperTag = element.tagName.toUpperCase()
+  const isImage = upperTag === 'IMG'
+  const text = wordsOf(element)
+  const isNonText = NON_TEXT_TAGS.has(upperTag)
+  const isImagePlaceholder =
+    !isImage &&
+    element.children.length === 0 &&
+    (element.hasAttribute('data-image-slot') || /^replace with an image$/i.test(text))
   return {
     tag: element.tagName.toLowerCase(),
-    text: wordsOf(element),
+    text,
     src: isImage ? (element.getAttribute('src') ?? '') : '',
-    // No element children, and it is not a void element pretending to be text.
-    editableText: !isImage && element.children.length === 0,
+    // No element children, and it is not a void/media element pretending to be text.
+    editableText: !isNonText && element.children.length === 0,
     isImage,
+    isImagePlaceholder,
     step: Number.isFinite(step) && step > 0 ? Math.floor(step) : 0,
   }
 }
@@ -558,8 +644,8 @@ export function setElementText(
   if (!slide) return html
   const element = elementAtPath(slide, path)
   if (!element || element === slide) return html
-  // Refuse a container: writing text into it would delete its children.
-  if (element.children.length) return html
+  // Refuse a container or void/media element: writing text into it would corrupt markup.
+  if (element.children.length || NON_TEXT_TAGS.has(element.tagName.toUpperCase())) return html
   element.textContent = text
   return serialize(doc)
 }

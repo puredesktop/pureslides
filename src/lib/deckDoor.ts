@@ -150,6 +150,7 @@ export function reasonFor(origin: DeckEditOrigin, reason?: string): string {
 export const DECK_REASON_LABELS: Readonly<Record<string, string>> = Object.freeze({
   draft: 'drafting',
   'agent-setDeck': 'a deck rewrite by the agent',
+  'drawer-request': 'an assistant change',
 })
 
 export function reasonLabel(reason: string): string {

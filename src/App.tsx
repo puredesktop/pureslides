@@ -110,6 +110,7 @@ import {
   isUntouchedStarter,
   labelForPath,
   moveSlide,
+  replaceSlideHtml,
   setElementStep,
   setElementSrc,
   setElementText,
@@ -118,11 +119,13 @@ import {
   slidesFromHtml,
 } from './lib/slides'
 import {
+  BLANK_SLIDE_HTML,
   blockCatalogue,
   blockHtmlWith,
   findBlock,
   type BlockFill,
 } from './lib/blocks'
+import { isSafeAssetFileName } from './lib/sanitizeDeck'
 import type { SlideEdit } from './lib/slides'
 import {
   assertScope,
@@ -276,6 +279,7 @@ export function App(): React.ReactElement {
   const [asking, setAsking] = useState(false)
 
   const [material, setMaterial] = useState<MaterialItem[]>([])
+  const [materialLoadedPath, setMaterialLoadedPath] = useState<string | null>(null)
   const [previews, setPreviews] = useState<Record<string, string>>({})
   const previewsRef = useRef<Record<string, string>>({})
   previewsRef.current = previews
@@ -705,23 +709,25 @@ export function App(): React.ReactElement {
           path !== boundPathRef.current ||
           baseHash !== hashRef.current ||
           transitions.busy
-        )
-          return {
-            error:
-              'The deck changed while its revision was loading. Try again.',
-          }
+        ) {
+          const message =
+            'The deck changed while its revision was loading. Try again.'
+          setStatus(message)
+          return { error: message }
+        }
         if ('error' in found) {
           setStatus(found.error)
           return found
         }
-        const result = editDeck({
-          transform: () => found.content,
-          origin: 'restore',
-          rebase: false,
-          label: `Restored the deck from before ${reasonLabel(
-            found.target.reason,
-          )}.`,
-        })
+      const result = editDeck({
+        transform: () => found.content,
+        origin: 'restore',
+        rebase: false,
+        label: `Restored the deck from before ${reasonLabel(
+          found.target.reason,
+        )}.`,
+      })
+      if (result.ok) {
         void recordOperation({
           lane: 'user',
           kind: 'deck.restore',
@@ -733,7 +739,8 @@ export function App(): React.ReactElement {
             ? { refs: { path: boundPathRef.current } }
             : {}),
         })
-        return result
+      }
+      return result
       } finally {
         setRestoring(false)
       }
@@ -875,6 +882,7 @@ export function App(): React.ReactElement {
         if (!current()) return
         materialRef.current = merged
         setMaterial(merged)
+        setMaterialLoadedPath(path)
         const pixels = await readMaterialPreviews(
           path,
           merged,
@@ -956,6 +964,8 @@ export function App(): React.ReactElement {
             setPresentOpen(false)
             setHtmlOpen(false)
             setExportOpen(false)
+            setHistoryOpen(false)
+            setProposeOpen(false)
             if (!exportingRef.current && !sameDeck) {
           setProgress(IDLE_PROGRESS)
           setLastExportPath(null)
@@ -977,7 +987,7 @@ export function App(): React.ReactElement {
               entry =>
                 entry?.name &&
                 !entry.isDirectory &&
-                /\.(pdf|mp4)$/i.test(entry.name),
+                /\.(pdf|pptx|mp4)$/i.test(entry.name),
             )
                 if (file)
                   setLastExportPath(`${root}/${DECK_EXPORT_DIR}/${file.name}`)
@@ -1037,20 +1047,45 @@ export function App(): React.ReactElement {
     return () => window.clearTimeout(handle)
   }, [document.title])
 
+  // Clamp selectedSlide & slideSelection whenever slides shrink (e.g. restore,
+  // HTML edit, setDeck, remote live sync).
+  useEffect(() => {
+    const count = slides.length
+    if (!count) return
+    setSelectedSlide(current => (current >= count ? count - 1 : current < 0 ? 0 : current))
+    setSlideSelection(current => {
+      const next = current.filter(index => index >= 0 && index < count)
+      return next.length === current.length ? current : next
+    })
+  }, [slides.length])
+
   // ---- slide operations: every one is a document edit -------------------
 
   const moveSlideAt = useCallback(
     (from: number, to: number) => {
       editHtml(html => moveSlide(html, from, to), 'Slide moved.')
       setSelectedSlide(to)
+      setSlideSelection(current =>
+        current
+          .map(idx => {
+            if (idx === from) return to
+            if (from < to && idx > from && idx <= to) return idx - 1
+            if (from > to && idx >= to && idx < from) return idx + 1
+            return idx
+          })
+          .sort((a, b) => a - b),
+      )
     },
     [editHtml],
   )
 
   const duplicateSlideAt = useCallback(
     (index: number) => {
-      editHtml(html => duplicateSlide(html, index), 'Slide duplicated.')
+      editHtml(html => duplicateSlide(html, index), `Duplicated slide ${index + 1} as slide ${index + 2}.`)
       setSelectedSlide(index + 1)
+      setSlideSelection(current =>
+        current.map(idx => (idx > index ? idx + 1 : idx)),
+      )
     },
     [editHtml],
   )
@@ -1065,6 +1100,11 @@ export function App(): React.ReactElement {
       }
       setSelectedSlide(current =>
         Math.max(0, current - (index <= current ? 1 : 0)),
+      )
+      setSlideSelection(current =>
+        current
+          .filter(idx => idx !== index)
+          .map(idx => (idx > index ? idx - 1 : idx)),
       )
     },
     [editHtml],
@@ -1088,6 +1128,28 @@ export function App(): React.ReactElement {
     [editHtml],
   )
 
+  const addBlankSlide = useCallback(() => {
+    const before = slidesFromHtml(documentRef.current.html).length
+    editHtml(html => addSlide(html, BLANK_SLIDE_HTML), 'Added a blank slide.')
+    setSelectedSlide(before)
+    setBoardTab('slides')
+  }, [editHtml])
+
+  const applyRehearsalTimings = useCallback(
+    (secondsBySlide: number[]) => {
+      editHtml(html => {
+        let next = html
+        secondsBySlide.forEach((seconds, idx) => {
+          if (Number.isFinite(seconds) && seconds > 0) {
+            next = setSlideContent(next, idx, { seconds })
+          }
+        })
+        return next
+      }, 'Applied rehearsal timings to slides.')
+    },
+    [editHtml],
+  )
+
   /** Retype a picked element's words, without going through the model. */
   const editElementText = useCallback(
     (path: string, text: string, index = selectedSlideRef.current) =>
@@ -1105,11 +1167,12 @@ export function App(): React.ReactElement {
   const replaceElementImage = useCallback(
     (path: string, index = selectedSlideRef.current) => {
       void (async () => {
-        const deckPath = boundPathRef.current
+        const deckPath = await ensureWizardDraft()
         if (!deckPath) {
           setStatus('Save the deck first, so there is a package to add to.')
           return
         }
+        const baseHash = hashRef.current
         try {
           const result = (await bridge.call(
             PLATFORM_BRIDGE_METHODS.DIALOG_OPEN_FILE,
@@ -1136,11 +1199,17 @@ export function App(): React.ReactElement {
           )) as { path?: string | null } | null
           const picked = result?.path
           if (!picked) return
+          if (boundPathRef.current !== deckPath || transitions.busy) {
+            setStatus('The deck changed before the image could be placed. Try again.')
+            return
+          }
           const reference = await addPackageAsset(picked)
+          if (boundPathRef.current !== deckPath || transitions.busy) return
           await loadMaterial(deckPath, notesFrom(materialRef.current))
           editHtml(
             html => setElementSrc(html, index, path, reference),
             'Image placed.',
+            { baseHash },
           )
         } catch (imageError) {
           setStatus(
@@ -1238,18 +1307,20 @@ export function App(): React.ReactElement {
   // ---- assets ------------------------------------------------------------
 
   const describeAsset = useCallback((name: string, description: string) => {
-    setMaterial(items =>
-      items.map(item =>
-        item.name === name ? { ...item, description, described: false } : item,
-      ),
+    const next = materialRef.current.map(item =>
+      item.name === name ? { ...item, description, described: false } : item,
     )
+    materialRef.current = next
+    setMaterial(next)
     lifecycleRef.current.markDirty()
   }, [])
 
   const setAssetRole = useCallback((name: string, role: AssetRole) => {
-    setMaterial(items =>
-      items.map(item => (item.name === name ? { ...item, role } : item)),
+    const next = materialRef.current.map(item =>
+      item.name === name ? { ...item, role } : item,
     )
+    materialRef.current = next
+    setMaterial(next)
     lifecycleRef.current.markDirty()
   }, [])
 
@@ -1260,13 +1331,18 @@ export function App(): React.ReactElement {
       item => item.kind === 'image' && !item.description.trim(),
     )
     if (!pending.length) return
-    await prepareDrawerRequest(
-      'describe',
-      'Describe the attached image pixels in one factual sentence each. Do not infer from filenames. If you cannot view images, report the limitation; do not commit invented descriptions.',
-      [],
-      [],
-      true,
-    )
+    setBusy('describing')
+    try {
+      await prepareDrawerRequest(
+        'describe',
+        'Describe the attached image pixels in one factual sentence each. Do not infer from filenames. If you cannot view images, report the limitation; do not commit invented descriptions.',
+        [],
+        [],
+        true,
+      )
+    } finally {
+      setBusy(null)
+    }
   }, [])
 
   /**
@@ -1325,6 +1401,7 @@ export function App(): React.ReactElement {
     slides: number
     title: string
   }> => {
+    setBusy('drafting')
     try {
       await prepareDrawerRequest('draft', briefRef.current, [], [], true)
       setBoardTab('slides')
@@ -1332,6 +1409,8 @@ export function App(): React.ReactElement {
     } catch (error) {
       setStatus(String(error))
       return { slides: 0, title: documentRef.current.title }
+    } finally {
+      setBusy(null)
     }
   }, [])
 
@@ -1615,7 +1694,8 @@ export function App(): React.ReactElement {
       const path = boundPathRef.current
       if (!path) throw new Error('there is no deck open')
       const fileName = name.trim()
-      if (!fileName) throw new Error('the asset needs a file name')
+      if (!fileName || !isSafeAssetFileName(fileName))
+        throw new Error('the asset needs a safe file name without path separators')
       try {
         await createFolder(path, DECK_ASSETS_DIR)
       } catch {
@@ -1706,7 +1786,7 @@ export function App(): React.ReactElement {
             title: 'Add to this deck',
             filters: [
               {
-                name: 'Images and fonts',
+                name: 'Images, videos and fonts',
                 extensions: [
                   'png',
                   'jpg',
@@ -1715,6 +1795,10 @@ export function App(): React.ReactElement {
                   'webp',
                   'avif',
                   'svg',
+                  'mp4',
+                  'webm',
+                  'mov',
+                  'm4v',
                   'woff',
                   'woff2',
                   'ttf',
@@ -1814,6 +1898,8 @@ export function App(): React.ReactElement {
           setPresentOpen(false)
           setHtmlOpen(false)
           setExportOpen(false)
+          setHistoryOpen(false)
+          setProposeOpen(false)
           setBoardTab('slides')
           setWizardOpen(true)
           setStatus('New deck.')
@@ -1926,6 +2012,8 @@ export function App(): React.ReactElement {
             ? `Exported ${result.units} pages.`
             : kind === 'images'
             ? `Exported ${result.units} images.`
+            : kind === 'pptx'
+            ? `Exported ${fileNameFromPath(result.outputPath)}.`
             : /\.mp4$/i.test(result.outputPath)
             ? `Exported ${fileNameFromPath(result.outputPath)}.`
             : `Captured ${result.units} frames — this runtime cannot encode video.`,
@@ -2265,14 +2353,7 @@ export function App(): React.ReactElement {
         ),
       setHtml: (index, html, options) =>
         editHtml(
-          current => {
-            const wrapped = html.trim().startsWith('<')
-              ? html
-              : `<div data-slide>${html}</div>`
-            return setSlideElement(current, index, '', wrapped) === current
-              ? addSlide(deleteSlide(current, index), wrapped, index)
-              : setSlideElement(current, index, '', wrapped)
-          },
+          current => replaceSlideHtml(current, index, html),
           'Slide replaced.',
           agentEdit(options, `slide ${index + 1}`),
         ),
@@ -2338,6 +2419,10 @@ export function App(): React.ReactElement {
     listRevisions: () => history.newestFirst(),
     restoreRevision,
     setSelection: patch => {
+      const targetSlide =
+        patch.selectedSlide !== undefined
+          ? patch.selectedSlide
+          : selectedSlideRef.current
       if (patch.selectedSlide !== undefined) setSelectedSlide(patch.selectedSlide)
       if (patch.slideIndexes !== undefined) setSlideSelection(patch.slideIndexes)
       if (patch.elementPaths !== undefined) {
@@ -2346,7 +2431,7 @@ export function App(): React.ReactElement {
             path,
             label: labelForPath(
               documentRef.current.html,
-              selectedSlideRef.current,
+              targetSlide,
               path,
             ),
           })),
@@ -2495,12 +2580,18 @@ export function App(): React.ReactElement {
             previews={previews}
             from={presentFrom}
             onPositionChange={setSelectedSlide}
+            onApplyTimings={applyRehearsalTimings}
           />
           <ExportDialog
             open={exportOpen}
             onClose={() => setExportOpen(false)}
             html={document.html}
             slides={slides}
+            availableAssets={
+              documentPath && materialLoadedPath === documentPath
+                ? material.map(item => item.name)
+                : undefined
+            }
             progress={progress}
             lastExportPath={lastExportPath}
             verification={verification}
@@ -2511,6 +2602,10 @@ export function App(): React.ReactElement {
             }
             onCancel={() => stopExport()}
             onReveal={path => void revealPath(path)}
+            onSelectSlide={index => {
+              setBoardTab('slides')
+              setSelectedSlide(index)
+            }}
           />
           <HtmlDialog
             open={htmlOpen}
@@ -2519,15 +2614,19 @@ export function App(): React.ReactElement {
             hash={deckHash}
             onCommit={(html, baseHash) => {
               // A whole-text replacement cannot be merged: if the deck moved
-              // underneath the dialog, the commit is refused and the dialog
-              // re-syncs to the current version.
+              // underneath the dialog, the commit is refused as stale; if the
+              // markup is invalid, the dialog keeps the buffer intact.
               const result = editHtml(() => html, 'Source edited.', {
                 baseHash,
                 rebase: false,
               })
               return result.ok
                 ? { ok: true }
-                : { ok: false, message: result.message }
+                : {
+                    ok: false,
+                    reason: result.reason === 'stale' ? 'stale' : 'invalid',
+                    message: result.message,
+                  }
             }}
           />
           <ProposeDialog
@@ -2554,8 +2653,18 @@ export function App(): React.ReactElement {
             entries={revisionsNewestFirst}
             currentTextChars={currentTextChars}
             busy={restoring}
-            onRestore={file => {
-              void restoreRevision(file)
+            onPreview={async file => {
+              const found = await history.restore(file)
+              if ('error' in found) return null
+              const parsed = slidesFromHtml(found.content)
+              return {
+                slides: parsed.length,
+                headlines: parsed.map(slide => slide.headline),
+              }
+            }}
+            onRestore={async file => {
+              const outcome = await restoreRevision(file)
+              return !('error' in outcome) && outcome.ok
             }}
           />
         </>
@@ -2590,13 +2699,22 @@ export function App(): React.ReactElement {
               onDescribe={describeAsset}
               onSetRole={setAssetRole}
               onPlace={name => {
-                const result = placeBlock('video-full', undefined, undefined, { asset: name })
-                if (result && result.ok) {
+                const block = findBlock('video-full')
+                if (!block) return
+                const result = editHtml(
+                  html => addSlide(html, blockHtmlWith(block, { asset: name })),
+                  `Added a ${block.label.toLowerCase()} slide with ${name}.`,
+                )
+                if (result.ok) {
                   setSelectedSlide(slidesFromHtml(documentRef.current.html).length - 1)
                   setBoardTab('slides')
                 }
               }}
-              onDescribeAll={() => void describeAll()}
+              onDescribeAll={() =>
+                void describeAll().catch(err =>
+                  setStatus(err instanceof Error ? err.message : String(err)),
+                )
+              }
               onBrief={next => {
                 setBrief(next)
                 lifecycleRef.current.markDirty()
@@ -2610,6 +2728,7 @@ export function App(): React.ReactElement {
           onDuplicate={duplicateSlideAt}
           onDelete={deleteSlideAt}
           onAdd={addSlideAtEnd}
+          onAddBlank={addBlankSlide}
           onElementText={(path, text) => editElementText(path, text)}
           onEditElement={(index, path, outerHtml, frameHtml) => {
             // Emptying an element inline MEANS deleting it — a committed
@@ -2638,6 +2757,7 @@ export function App(): React.ReactElement {
               emptied ? 'Element deleted.' : 'Edited.',
               { baseHash },
             )
+            if (emptied) setElementSelection([])
           }}
           onReplaceImage={path => replaceElementImage(path)}
           onEdit={editSlide}

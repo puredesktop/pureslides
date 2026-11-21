@@ -261,9 +261,18 @@ export function lookFromBrand(brand: BrandFile, brandPath: string): BrandLook {
   const copies: BrandCopy[] = []
   const faces: BrandFace[] = []
   for (const f of brand.fonts ?? []) {
-    const to = `assets/fonts/brand/${safeName(baseName(f.file))}`
+    const fileName = safeName(baseName(f.file))
+    const to = `assets/fonts/brand/${fileName}`
+    const familyName = f.family.split(',')[0].trim().replace(/^["']|["']$/g, '')
+    // Preserve variable weight range when re-importing a bundled variable font
+    // whose weight range (e.g. "100 900") was serialized as a single integer.
+    const bundled = bundledFamily(familyName)
+    const matchedBundledFace = bundled?.faces.find(
+      bf => bf.file === fileName && bf.style === (f.style ?? 'normal'),
+    )
+    const faceWeight = matchedBundledFace?.weight ?? String(f.weight ?? 400)
     copies.push({ from: `${dir}/${f.file}`, to })
-    faces.push({ family: f.family.split(',')[0].trim().replace(/^["']|["']$/g, ''), weight: String(f.weight ?? 400), style: f.style ?? 'normal', file: to })
+    faces.push({ family: familyName, weight: faceWeight, style: f.style ?? 'normal', file: to })
   }
   const carried = (name: string) => faces.some(face => face.family.toLowerCase() === name.toLowerCase())
   const face = (value: string | undefined, fallback: string) => {
