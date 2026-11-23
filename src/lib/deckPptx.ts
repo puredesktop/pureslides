@@ -118,13 +118,28 @@ export function extractSlideHtmlList(deckHtml: string): string[] {
 }
 
 export function appendSnippetToSlide(deckHtml: string, slideIndex: number, snippet: string): string {
+  if (slideIndex < 0) return deckHtml
+  if (typeof DOMParser !== 'undefined') {
+    const doc = new DOMParser().parseFromString(deckHtml, 'text/html')
+    const root = doc.querySelector('[data-deck-id]') ?? doc.querySelector('#deck')
+    if (root) {
+      const slides = [...root.children].filter(child => child.matches('[data-slide]'))
+      const target = slides[slideIndex]
+      if (!target) return deckHtml
+      target.insertAdjacentHTML('beforeend', snippet)
+      return `<!DOCTYPE html>\n${doc.documentElement.outerHTML}\n`
+    }
+  }
   const list = extractSlideHtmlList(deckHtml)
   const target = list[slideIndex]
   if (!target) return deckHtml
-  const next = /<\/section>\s*$/i.test(target)
-    ? target.replace(/<\/section>\s*$/i, `${snippet}</section>`)
+  const pos = deckHtml.indexOf(target)
+  if (pos < 0) return deckHtml
+  const closingMatch = /(<\/(?:section|div|article)>\s*)$/i.exec(target)
+  const next = closingMatch
+    ? `${target.slice(0, closingMatch.index)}${snippet}${closingMatch[1]}`
     : `${target}${snippet}`
-  return deckHtml.replace(target, next)
+  return `${deckHtml.slice(0, pos)}${next}${deckHtml.slice(pos + target.length)}`
 }
 
 export interface EditablePptxTheme {

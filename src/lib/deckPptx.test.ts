@@ -1,6 +1,6 @@
 import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
-import { base64Of, buildDeckPptx, buildEditableDeckPptx, pptxLayout } from './deckPptx'
+import { appendSnippetToSlide, base64Of, buildDeckPptx, buildEditableDeckPptx, extractSlideHtmlList, pptxLayout } from './deckPptx'
 
 // A 2×1 PNG, enough for the writer to embed.
 const PNG =
@@ -92,5 +92,22 @@ describe('the deck as PowerPoint', () => {
     expect(slide2).toContain('<a:tbl>')
     expect(slide2).toContain('North America')
     expect(notes1).toContain('Emphasize enterprise retention.')
+  })
+
+  it('appends live-data snippets inside div and section slides without corrupting dollar signs', () => {
+    const divDeck =
+      '<!DOCTYPE html><html><body><div id="deck" data-deck-id="d1"><div data-slide><h1>One</h1></div><div data-slide><h1>Two</h1></div></div></body></html>'
+    const updatedDiv = appendSnippetToSlide(divDeck, 1, '<div class="stat"><strong>$4.8M $&</strong></div>')
+    const divSlides = extractSlideHtmlList(updatedDiv)
+    expect(divSlides).toHaveLength(2)
+    expect(divSlides[0]).not.toContain('$4.8M')
+    expect(divSlides[1]).toContain('$4.8M $&amp;')
+
+    const sectionDeck =
+      '<!DOCTYPE html><html><body><div id="deck" data-deck-id="d2"><section data-slide><h1>Sec</h1></section></div></body></html>'
+    const updatedSec = appendSnippetToSlide(sectionDeck, 0, '<p>$100</p>')
+    const secSlides = extractSlideHtmlList(updatedSec)
+    expect(secSlides).toHaveLength(1)
+    expect(secSlides[0]).toContain('<p>$100</p>')
   })
 })

@@ -2877,6 +2877,7 @@ export function App(): React.ReactElement {
               downloadPortableHtml()
             }}
             onApplySuggestion={(slideIndex: number, card: SuggestionCard) => {
+              if (slides.length === 0) return
               editHtml(
                 current =>
                   setSlideContent(current, Math.max(0, Math.min(slides.length - 1, slideIndex)), {
@@ -2924,17 +2925,23 @@ export function App(): React.ReactElement {
                   onInsertMetric={(ds: LiveDataset, metricKey: string) => {
                     const m = ds.metrics.find(item => item.key === metricKey)
                     if (!m) return
-                    const attr = bindMetricAttr(ds.id, m.key)
+                    const esc = (v: string) =>
+                      v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+                    const attr = esc(bindMetricAttr(ds.id, m.key))
                     editHtml(current => {
-                      const snippet = `<div class="stat" data-kpi="1" style="border:1px solid var(--slide-line,#d4d7dc);border-left:3px solid var(--slide-accent,#936c00);padding:14px 18px;margin-top:16px;display:inline-block"><strong data-live-bind="${attr}" style="font-size:2em;display:block">${m.value}</strong><span style="font-size:0.75em;opacity:0.75">${m.label}</span></div>`
+                      const snippet = `<div class="stat" data-kpi="1" style="border:1px solid var(--slide-line,#d4d7dc);border-left:3px solid var(--slide-accent,#936c00);padding:14px 18px;margin-top:16px;display:inline-block"><strong data-live-bind="${attr}" style="font-size:2em;display:block">${esc(String(m.value))}</strong><span style="font-size:0.75em;opacity:0.75">${esc(String(m.label))}</span></div>`
                       return appendSnippetToSlide(current, selectedSlide, snippet)
                     }, `Bound live KPI "${m.label}" on slide ${selectedSlide + 1}.`)
                     setLiveRefreshSummary(`Bound "${m.label}" (${m.value}) from ${ds.name}.`)
                   }}
                   onInsertTable={(ds: LiveDataset) => {
-                    const attr = bindTableAttr(ds.id)
-                    const ths = ds.table.headers.map(h => `<th>${h}</th>`).join('')
-                    const trs = ds.table.rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
+                    const esc = (v: string) =>
+                      v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+                    const attr = esc(bindTableAttr(ds.id))
+                    const ths = ds.table.headers.map(h => `<th>${esc(String(h))}</th>`).join('')
+                    const trs = ds.table.rows
+                      .map(r => `<tr>${r.map(c => `<td>${esc(String(c))}</td>`).join('')}</tr>`)
+                      .join('')
                     editHtml(current => {
                       const snippet = `<table data-live-bind="${attr}" style="width:100%;border-collapse:collapse;margin-top:16px"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`
                       return appendSnippetToSlide(current, selectedSlide, snippet)

@@ -480,7 +480,12 @@ export function DeckShareDrawer({
                         ...(s.support ? { body: s.support } : {}),
                         ...(s.notes ? { notes: s.notes } : {}),
                       })),
-                    }).then(() => setNotice(`Sent "${title}" to ${dest.label.replace('Send to ', '')}.`))
+                    })
+                      .then(() => {
+                        setError(null)
+                        setNotice(`Sent "${title}" to ${dest.label.replace('Send to ', '')}.`)
+                      })
+                      .catch(err => setError(err instanceof Error ? err.message : String(err)))
                   }}
                 >
                   {dest.label}
