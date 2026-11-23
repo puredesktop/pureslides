@@ -40,6 +40,8 @@ import { checkDeck } from './checkDeck'
 import { hashDeck } from './deckDoor'
 import { geometryFromHtml } from './deckDocument'
 import { buildDeckPptx, type PptxVideo } from './deckPptx'
+import { buildPortableDeckHtml } from './portableDeckHtml'
+import type { PreviewAssetMap } from './packageAssets'
 import type { VideoPlacement } from './videoPlacements'
 import { escapeHtmlText, resolveSafePackageRelativePath } from './sanitizeDeck'
 import { SEEK_ENGINE, printScript, shownSlideHtml } from './slideSeek'
@@ -79,7 +81,7 @@ export interface ExportVerification {
   failedMessage: () => string
 }
 
-export type ExportKind = 'pdf' | 'images' | 'video' | 'pptx'
+export type ExportKind = 'pdf' | 'images' | 'video' | 'pptx' | 'html'
 
 export interface ExportProgressState {
   phase: 'idle' | 'preparing' | 'working' | 'done' | 'error'
@@ -111,6 +113,8 @@ export interface ExportRequest {
    * deck without video passes nothing.
    */
   videos?: VideoPlacement[]
+  /** Inlined asset previews for self-contained Portable HTML exports. */
+  previews?: PreviewAssetMap
 }
 
 export interface ExportResult {
@@ -511,6 +515,23 @@ export async function exportDeck(request: ExportRequest): Promise<ExportResult> 
   // The output file is named from the DECK's title, not the browser tab's:
   // stemming from `document.title` named every deck's export the same.
   const stem = fileStem(title)
+
+  if (kind === 'html') {
+    report({ phase: 'working', unit: 0, unitCount: slides.length, message: 'Packaging Portable HTML…' })
+    const outputPath = `${exportsDir}/${stem}.html`
+    const portable = buildPortableDeckHtml(html, {
+      title,
+      previews: request.previews,
+    })
+    await writeTextFile(outputPath, portable)
+    report({
+      phase: 'done',
+      unit: slides.length,
+      message: `Wrote ${outputPath.split('/').pop()}.`,
+      outputPath,
+    })
+    return { kind, outputPath, units: slides.length }
+  }
 
   if (kind === 'pdf') {
     report({ phase: 'preparing', message: 'Laying out the pages…' })

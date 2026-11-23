@@ -21,8 +21,16 @@ import { createDefaultDeckDocument } from '../lib/deckDocument'
 import { clearSlides, addSlide } from '../lib/slides'
 import { withDeckLook } from '../lib/deckLooks'
 import { LookPicker } from './LookPicker'
+import { SlideGridSorter } from './SlideGridSorter'
+import { ThemeStudioPanel } from './ThemeStudioPanel'
+import {
+  INSERTABLE_ELEMENTS,
+  remixOptions,
+  type InsertableElementKind,
+  type RemixableBlockId,
+} from '../lib/layoutRemix'
 import { houseStyleCaption } from '../lib/houseStyle'
-import { customLookFromHtml } from '../lib/customLook'
+import { customLookFromHtml, type CustomLookSpec } from '../lib/customLook'
 import { containDialogFocus } from './dialogFocus'
 import type { BoardTab, DeckGeometry, PickedElement } from '../types'
 import type { MaterialItem } from '../lib/material'
@@ -95,6 +103,22 @@ interface SlideBoardViewProps {
   compact?: boolean
   /** The deck's name, for compact: the app's header row, which shows it otherwise, is hidden there. */
   deckTitle?: string
+  /** Stage vs Grid lightbox slide sorter mode. */
+  viewMode?: 'stage' | 'grid'
+  onViewMode?: (mode: 'stage' | 'grid') => void
+  onApplyCustomLook?: (spec: CustomLookSpec) => void
+  onRemixSlide?: (index: number, targetBlockId: RemixableBlockId) => void
+  onInsertElement?: (index: number, kind: InsertableElementKind) => void
+  onOpenOutline?: () => void
+  onOpenHealth?: () => void
+  onOpenShare?: () => void
+  onOpenCommandPalette?: () => void
+  onUndo?: () => void
+  onRedo?: () => void
+  isLiveShared?: boolean
+  standaloneDev?: boolean
+  /** Incremented by Command Palette when jumping directly to Theme Studio. */
+  focusDesignNonce?: number
 }
 
 export function SlideBoardView({
@@ -144,11 +168,34 @@ export function SlideBoardView({
   documentPath = null,
   compact = false,
   deckTitle = '',
+  viewMode: controlledViewMode,
+  onViewMode,
+  onApplyCustomLook,
+  onRemixSlide,
+  onInsertElement,
+  onOpenOutline,
+  onOpenHealth,
+  onOpenShare,
+  onOpenCommandPalette,
+  onUndo,
+  onRedo,
+  isLiveShared = false,
+  standaloneDev = false,
+  focusDesignNonce = 0,
 }: SlideBoardViewProps): React.ReactElement {
   const slide: Slide | undefined = slides[selected] ?? slides[0]
   const [request, setRequest] = useState('')
   const [inspector, setInspector] = useState<'edit' | 'design'>('edit')
   const [inspectorOpen, setInspectorOpen] = useState(true)
+  const [internalViewMode, setInternalViewMode] = useState<'stage' | 'grid'>('stage')
+  const viewMode = controlledViewMode ?? internalViewMode
+  const setViewMode = useCallback(
+    (next: 'stage' | 'grid') => {
+      if (onViewMode) onViewMode(next)
+      else setInternalViewMode(next)
+    },
+    [onViewMode],
+  )
   const [step, setStep] = useState(0)
   /**
    * Dragging a card. `dropBefore` is a GAP, not a card: 0 is above the first
@@ -222,6 +269,95 @@ export function SlideBoardView({
     const card = stripRef.current?.querySelector(`[data-slide-card="${selected}"]`)
     card?.scrollIntoView({ block: 'nearest' })
   }, [selected])
+
+  useEffect(() => {
+    if (!focusDesignNonce) return
+    setInspector('design')
+    setInspectorOpen(true)
+  }, [focusDesignNonce])
+
+  // Board keyboard shortcuts: ↑/↓ slide nav, ⌘D duplicate, ⌘Z/⇧⌘Z undo/redo,
+  // G toggle grid sorter, ⌘K command palette, ⌥⌘P present.
+  useEffect(() => {
+    if (compact || pickerShown) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const mod = event.metaKey || event.ctrlKey
+      const key = event.key.toLowerCase()
+      const target = event.target instanceof Element ? event.target : null
+      const inField = Boolean(
+        target?.closest('input, textarea, select, [contenteditable="true"]'),
+      )
+
+      if (mod && key === 'k' && onOpenCommandPalette) {
+        event.preventDefault()
+        onOpenCommandPalette()
+        return
+      }
+      if (mod && event.altKey && key === 'p') {
+        event.preventDefault()
+        onPresent()
+        return
+      }
+      if (inField) return
+
+      if (mod && key === 'd') {
+        event.preventDefault()
+        if (slides[selected]) onDuplicate(selected)
+        return
+      }
+      if (mod && key === 'z') {
+        if (event.shiftKey) {
+          if (onRedo) {
+            event.preventDefault()
+            onRedo()
+          }
+        } else if (onUndo) {
+          event.preventDefault()
+          onUndo()
+        }
+        return
+      }
+      if (event.ctrlKey && !event.metaKey && key === 'y' && onRedo) {
+        event.preventDefault()
+        onRedo()
+        return
+      }
+      if (!mod && !event.altKey && key === 'g' && tab === 'slides') {
+        event.preventDefault()
+        setViewMode(viewMode === 'grid' ? 'stage' : 'grid')
+        return
+      }
+      if (!mod && !event.altKey && event.key === 'ArrowDown' && tab === 'slides') {
+        if (selected < slides.length - 1) {
+          event.preventDefault()
+          onSelect(selected + 1)
+        }
+        return
+      }
+      if (!mod && !event.altKey && event.key === 'ArrowUp' && tab === 'slides') {
+        if (selected > 0) {
+          event.preventDefault()
+          onSelect(selected - 1)
+        }
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [
+    compact,
+    pickerShown,
+    onOpenCommandPalette,
+    onPresent,
+    onDuplicate,
+    onUndo,
+    onRedo,
+    onSelect,
+    selected,
+    slides,
+    tab,
+    viewMode,
+    setViewMode,
+  ])
 
   // Escape closes the block picker, the way it closes every other overlay.
   useEffect(() => {
@@ -410,6 +546,31 @@ export function SlideBoardView({
               Files
             </TabButton>
           </Tabs>
+          {tab === 'slides' ? (
+            <>
+              <Sep aria-hidden />
+              <Tabs role="group" aria-label="Slide view mode">
+                <TabButton
+                  type="button"
+                  aria-pressed={viewMode === 'stage'}
+                  data-active={viewMode === 'stage' ? '' : undefined}
+                  onClick={() => setViewMode('stage')}
+                  title="Stage view (G)"
+                >
+                  Stage
+                </TabButton>
+                <TabButton
+                  type="button"
+                  aria-pressed={viewMode === 'grid'}
+                  data-active={viewMode === 'grid' ? '' : undefined}
+                  onClick={() => setViewMode('grid')}
+                  title="Grid slide sorter (G)"
+                >
+                  Grid
+                </TabButton>
+              </Tabs>
+            </>
+          ) : null}
           <span style={{ flex: 1 }} />
           <ToolbarMeta>
             {slides.length} {slides.length === 1 ? 'slide' : 'slides'} ·{' '}
@@ -431,6 +592,10 @@ export function SlideBoardView({
                 type="button"
                 $state={verification.state}
                 onClick={() => {
+                  if (onOpenHealth) {
+                    onOpenHealth()
+                    return
+                  }
                   if (nextFailedTarget !== undefined && !alreadyOnTarget) {
                     if (tab !== 'slides') onTab('slides')
                     onSelect(nextFailedTarget)
@@ -439,13 +604,15 @@ export function SlideBoardView({
                   onRecheck()
                 }}
                 title={
-                  verification.state === 'verified'
-                    ? 'Every slide measured cleanly with its fonts loaded. Click to measure again.'
-                    : verification.state === 'failed' && nextFailedTarget !== undefined
-                      ? alreadyOnTarget
-                        ? `${verification.message}. Click to measure again.`
-                        : `${verification.message}. Click to jump to slide ${nextFailedTarget + 1}.`
-                      : 'Slides are measured as they render; a hidden frame or a font still loading is never trusted. Click to measure every slide now.'
+                  onOpenHealth
+                    ? `${verification.message} — click to open Deck Health & Polish drawer`
+                    : verification.state === 'verified'
+                      ? 'Every slide measured cleanly with its fonts loaded. Click to measure again.'
+                      : verification.state === 'failed' && nextFailedTarget !== undefined
+                        ? alreadyOnTarget
+                          ? `${verification.message}. Click to measure again.`
+                          : `${verification.message}. Click to jump to slide ${nextFailedTarget + 1}.`
+                        : 'Slides are measured as they render; a hidden frame or a font still loading is never trusted. Click to measure every slide now.'
                 }
               >
                 {verification.message}
@@ -453,6 +620,16 @@ export function SlideBoardView({
             )
           })()}
           <Sep aria-hidden />
+          {onOpenCommandPalette ? (
+            <HtmlButton type="button" onClick={onOpenCommandPalette} title="Open Command Palette (⌘K)">
+              ⌘K
+            </HtmlButton>
+          ) : null}
+          {onOpenOutline ? (
+            <HtmlButton type="button" onClick={onOpenOutline} title="Markdown script-to-deck studio">
+              Outline
+            </HtmlButton>
+          ) : null}
           <HtmlButton
             type="button"
             onClick={onHistory}
@@ -464,13 +641,18 @@ export function SlideBoardView({
             HTML
           </HtmlButton>
           <HtmlButton type="button" aria-pressed={inspectorOpen} onClick={() => setInspectorOpen(value => !value)} title="Show or hide slide inspector">Inspector</HtmlButton>
-          <PresentButton type="button" onClick={onPresent}>
+          {onOpenShare ? (
+            <HtmlButton type="button" onClick={onOpenShare} title="Publish live web deck & Audience Q&A">
+              {isLiveShared ? '● Share' : 'Share'}
+            </HtmlButton>
+          ) : null}
+          <PresentButton type="button" onClick={onPresent} title="Present deck (⌥⌘P)">
             <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
               <path d="M2.5 1.5l8 4.5-8 4.5z" />
             </svg>
             Present
           </PresentButton>
-          {outputOffered() ? (
+          {outputOffered() || standaloneDev ? (
             <ExportButton type="button" onClick={onExport}>
               Export…
             </ExportButton>
@@ -479,7 +661,27 @@ export function SlideBoardView({
 
         {/* Compact has no tabs to come back with, so it always shows the slides; Files stays mounted, hidden. */}
         {tab === 'assets' ? <AssetsPane>{assetsPane}</AssetsPane> : null}
-        {tab !== 'assets' || compact ? (
+        {(tab !== 'assets' || compact) && viewMode === 'grid' && !compact ? (
+          <SlideGridSorter
+            html={html}
+            slides={slides}
+            geometry={geometry}
+            selected={selected}
+            previews={previews}
+            evidence={evidence}
+            onSelect={onSelect}
+            onOpenSlide={index => {
+              onSelect(index)
+              setViewMode('stage')
+            }}
+            onMove={onMove}
+            onDuplicate={onDuplicate}
+            onDelete={onDelete}
+            onAddSlide={() => setPicker(true)}
+            onLayout={onLayout}
+          />
+        ) : null}
+        {(tab !== 'assets' || compact) && (viewMode !== 'grid' || compact) ? (
           <Body>
             <Strip
               ref={stripRef}
@@ -732,6 +934,14 @@ export function SlideBoardView({
             <DesignNote>A coordinated palette and type pairing for your presentation.</DesignNote>
             {houseStyleName ? <HouseStyleNote>{houseStyleCaption(houseStyleName)}</HouseStyleNote> : null}
             {onLook ? <LookPicker value={look} onChange={onLook} custom={look === 'custom' ? customLookFromHtml(html) : null} houseStyle={Boolean(houseStyleName)} /> : null}
+            {onApplyCustomLook && onLook ? (
+              <ThemeStudioPanel
+                html={html}
+                look={look}
+                onApplyCustomLook={onApplyCustomLook}
+                onResetStockLook={onLook}
+              />
+            ) : null}
             <DesignNote>Updates layouts using presentation styles. Custom colors and fonts stay as authored.</DesignNote>
             {onPropose ? (
               <ProposeRow>
@@ -853,6 +1063,43 @@ export function SlideBoardView({
               onChange={event => onEdit(slide.index, { notes: event.currentTarget.value })}
             />
           </Field>
+
+          {onRemixSlide ? (
+            <QuickSection>
+              <SectionHead>Remix layout</SectionHead>
+              <QuickGrid aria-label="Remix slide layout">
+                {remixOptions().map(option => (
+                  <QuickChip
+                    key={option.id}
+                    type="button"
+                    $active={slide.block === option.id}
+                    title={option.description}
+                    onClick={() => onRemixSlide(slide.index, option.id)}
+                  >
+                    {option.label}
+                  </QuickChip>
+                ))}
+              </QuickGrid>
+            </QuickSection>
+          ) : null}
+
+          {onInsertElement ? (
+            <QuickSection>
+              <SectionHead>Insert element</SectionHead>
+              <QuickGrid aria-label="Insert element quick-bar">
+                {INSERTABLE_ELEMENTS.map(el => (
+                  <QuickChip
+                    key={el.id}
+                    type="button"
+                    title={`Insert ${el.label}`}
+                    onClick={() => onInsertElement(slide.index, el.id)}
+                  >
+                    {el.label}
+                  </QuickChip>
+                ))}
+              </QuickGrid>
+            </QuickSection>
+          ) : null}
 
           </>}
           <AskBlock>
@@ -1869,6 +2116,28 @@ const DesignTitle = styled.div`font-size: 20px; font-weight: 600; letter-spacing
 const DesignNote = styled.p`margin: 0; font-size: 12px; line-height: 1.5; color: var(--pure-chrome-soft);`
 const HouseStyleNote = styled.p`margin: 0; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--platform-colors-text);`
 const ProposeRow = styled.div`display: flex; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--pure-chrome-line); button { padding: 0 12px; align-self: flex-start; }`
+const QuickSection = styled.div`display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--n-fence, var(--pure-chrome-line));`
+const QuickGrid = styled.div`display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px;`
+const QuickChip = styled.button<{ $active?: boolean }>`
+  height: 26px;
+  padding: 0 7px;
+  border: 1px solid ${props => (props.$active ? ACCENT : 'var(--n-line, var(--pure-chrome-line))')};
+  border-radius: 3px;
+  background: ${props => (props.$active ? 'var(--p-chosen, var(--n-selected))' : 'var(--n-sheet, var(--pure-chrome-surface))')};
+  color: var(--n-ink, var(--platform-colors-text));
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: ${props => (props.$active ? 600 : 500)};
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  &:hover {
+    border-color: ${ACCENT};
+    background: var(--n-hover, var(--pure-chrome-hover));
+  }
+`
 const LayoutPreview = styled.span`display: flex; justify-content: center; overflow: hidden; width: 100%; margin-bottom: 8px; border-radius: var(--pure-chrome-radius, 3px); pointer-events: none; background: var(--pure-chrome-well);`
 
 /** A thumbnail in compact's strip: thin, and still a real frame, so every slide goes on being measured. */
