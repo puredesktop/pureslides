@@ -76,6 +76,10 @@ interface SlideBoardViewProps {
   onAddFiles: () => void
   onPresent: () => void
   onExport: () => void
+  /** Opens the Review room. Absent where there is nothing to open and no way to start one (a guest, before a review). */
+  onReview?: () => void
+  /** Pictures waiting for this person in the deck's reviews. */
+  reviewWaiting?: number
   onEditHtml: () => void
   onAsk: (request: string) => void
   asking: boolean
@@ -153,6 +157,8 @@ export function SlideBoardView({
   onAddFiles,
   onPresent,
   onExport,
+  onReview,
+  reviewWaiting = 0,
   onEditHtml,
   onAsk,
   asking,
@@ -663,6 +669,11 @@ export function SlideBoardView({
             </svg>
             Present
           </PresentButton>
+          {onReview ? (
+            <PresentButton type="button" onClick={onReview} title="Make a picture of every slide, mark them up, and send your feedback in one go">
+              Review{reviewWaiting ? ` ${reviewWaiting}` : ''}
+            </PresentButton>
+          ) : null}
           {outputOffered() || standaloneDev ? (
             <ExportButton type="button" onClick={onExport}>
               Export…
@@ -824,6 +835,12 @@ export function SlideBoardView({
                     onLayout={onLayout}
                   />
                 </SelectedStage>
+                {compact && onReview && reviewWaiting ? (
+                  <CompactReviews>
+                    <span>{reviewWaiting} {reviewWaiting === 1 ? 'slide waits' : 'slides wait'} for review</span>
+                    <HtmlButton type="button" onClick={onReview}>Open</HtmlButton>
+                  </CompactReviews>
+                ) : null}
                 {compact ? (
                   <CompactNav>
                     <CompactTitle title={deckTitle}>{deckTitle}</CompactTitle>
@@ -2118,6 +2135,8 @@ const EmptyBody = styled.div`
   max-width: 44ch;
 `
 
+/** The mini view's line for a review waiting: what it says, and the one press that opens it. */
+const CompactReviews = styled.div`display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; font-size: 12px; color: var(--platform-colors-text); border-top: 1px solid var(--pure-chrome-line);`
 const ToolbarMeta = styled(Meta)`@media (max-width: 1280px) { display: none; }`
 const StripHeading = styled.div`display: flex; align-items: center; justify-content: space-between;`
 const PositionLabel = styled.span`font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;`

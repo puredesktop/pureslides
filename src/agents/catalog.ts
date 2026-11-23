@@ -6,6 +6,7 @@
  * knows how to reach the model — these are the app's own callbacks, handed
  * over so a tool cannot bypass the document lifecycle.
  */
+import { REVIEW_TOOL_NAMES } from '@purescience/platform-ui/review/tools'
 import type { RevisionEntry } from '@purescience/platform-ui/editing'
 import type { DeckDocument } from '../lib/deckDocument'
 import type { DeckEditResult } from '../lib/deckDoor'
@@ -97,6 +98,7 @@ export const EXPOSED_TOOL_NAMES = [
   ...PURESLIDES_FUNCTION_NAMES,
   ...PURESLIDES_CORE_TOOL_NAMES,
   ...PURESLIDES_META_TOOL_NAMES,
+  ...REVIEW_TOOL_NAMES,
 ] as const
 
 export const PURESLIDES_AGENT_TOOLS = EXPOSED_TOOL_NAMES

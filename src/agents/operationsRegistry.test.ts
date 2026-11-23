@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
+import { reviewToolDeclarations, REVIEW_TOOL_NAMES } from '@purescience/platform-ui/review/tools'
 import { createDefaultDeckDocument } from '../lib/deckDocument'
 import { withDeckLook } from '../lib/deckLooks'
 import { customLook, withCustomLook } from '../lib/customLook'
@@ -285,9 +286,11 @@ describe('PureSlides Operations Registry (Functions + Core + Extended Escape Hat
 
     expect(manifest.app.agents.tools).toEqual([
       ...PURESLIDES_OPERATIONS_REGISTRY.manifestTools,
+      ...reviewToolDeclarations({ noun: 'slide', plural: 'slides' }),
     ])
     expect([...EXPOSED_TOOL_NAMES]).toEqual([
       ...PURESLIDES_OPERATIONS_REGISTRY.exposedToolNames,
+      ...REVIEW_TOOL_NAMES,
     ])
     expect([...PURESLIDES_AGENT_TOOLS]).toEqual([...EXPOSED_TOOL_NAMES])
     expect([...PURESLIDES_EXTENDED_TOOL_NAMES].sort()).toEqual(

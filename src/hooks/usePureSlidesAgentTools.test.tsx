@@ -173,3 +173,38 @@ it('refuses a whole-deck rewrite or slide edit that does not name the hash it wa
     await act(async () => root.unmount())
   }
 })
+
+it('keeps shared Review tools registered with live handlers while preserving write guards', async () => {
+  let mayChange = false
+  const context = { blocks: [] } as unknown as DeckAgentToolContext
+  const first = vi.fn(async () => ({ content: 'first' }))
+  const current = vi.fn(async () => ({ content: 'current' }))
+  let calls = first
+  function Harness() {
+    usePureSlidesAgentTools(true, context, () => mayChange, {
+      openReview: calls,
+      getReviewFeedback: calls,
+      viewReviewItem: calls,
+      settleReviewNote: calls,
+    })
+    return null
+  }
+  const root = createRoot(document.createElement('div'))
+  try {
+    await act(async () => root.render(createElement(Harness)))
+    for (const name of ['openReview', 'getReviewFeedback', 'viewReviewItem', 'settleReviewNote']) {
+      expect(typeof probe.handlers[name]).toBe('function')
+    }
+    await expect(probe.handlers.openReview({ arguments: {} })).rejects.toThrow('finish opening')
+    await expect(probe.handlers.settleReviewNote({ arguments: {} })).rejects.toThrow('finish opening')
+    await expect(probe.handlers.getReviewFeedback({ arguments: {} })).resolves.toEqual({ content: 'first' })
+    mayChange = true
+    calls = current
+    await act(async () => root.render(createElement(Harness)))
+    await expect(probe.handlers.openReview({ arguments: {} })).resolves.toEqual({ content: 'current' })
+    await expect(probe.handlers.viewReviewItem({ arguments: {} })).resolves.toEqual({ content: 'current' })
+    await expect(probe.handlers.settleReviewNote({ arguments: {} })).resolves.toEqual({ content: 'current' })
+  } finally {
+    await act(async () => root.unmount())
+  }
+})

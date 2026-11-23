@@ -10,6 +10,7 @@
  * state as it is now rather than as it was when the drawer opened.
  */
 import { useMemo, useRef } from 'react'
+import { REVIEW_TOOL_NAMES } from '@purescience/platform-ui/review/tools'
 import type { AgentToolHandler } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import { usePlatformAgentTools } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import {
@@ -28,11 +29,14 @@ export function usePureSlidesAgentTools(
   ready: boolean,
   context: DeckAgentToolContext,
   mayChangeDeck: () => boolean = () => true,
+  reviewTools: Partial<Record<(typeof REVIEW_TOOL_NAMES)[number], AgentToolHandler>> = {},
 ): void {
   const contextRef = useRef(context)
   contextRef.current = context
   const mayChangeRef = useRef(mayChangeDeck)
   mayChangeRef.current = mayChangeDeck
+  const reviewRef = useRef(reviewTools)
+  reviewRef.current = reviewTools
 
   const registryHandlers = useMemo(
     () =>
@@ -59,8 +63,16 @@ export function usePureSlidesAgentTools(
       Object.fromEntries(
         EXPOSED_TOOL_NAMES.map(name => [
           name,
-          async (invoke: Parameters<AgentToolHandler>[0]) =>
-            registryHandlers[name]!(invoke),
+          async (invoke: Parameters<AgentToolHandler>[0]) => {
+            if ((REVIEW_TOOL_NAMES as readonly string[]).includes(name)) {
+              if ((name === 'openReview' || name === 'settleReviewNote') && !mayChangeRef.current()) {
+                throw new AgentDeckToolError('Wait for the deck to finish opening, then read getDeckContext again before changing it.')
+              }
+              const handler = reviewRef.current[name as (typeof REVIEW_TOOL_NAMES)[number]]
+              return handler ? handler(invoke) : { content: 'Review is not available here.', isError: true }
+            }
+            return registryHandlers[name]!(invoke)
+          },
         ]),
       ),
     [registryHandlers],
