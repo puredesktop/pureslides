@@ -53,6 +53,18 @@ import {
   outlineToDeckHtml,
 } from './lib/outlineToDeck'
 import { buildPortableDeckHtml } from './lib/portableDeckHtml'
+import { appendSnippetToSlide, buildEditableDeckPptx, extractSlideHtmlList } from './lib/deckPptx'
+import {
+  bindMetricAttr,
+  bindTableAttr,
+  LiveDataPanel,
+  refreshHtmlLiveBindings,
+  transformToSlideMarkdown,
+  WorkspaceThreadStrip,
+  type LiveDataset,
+  type SuggestionCard,
+  type TransformEnvelope,
+} from '@purescience/platform-ui/suite'
 import {
   autoFixHighContrastLook,
   autoFixRenumberSteps,
@@ -373,6 +385,8 @@ export function App(): React.ReactElement {
   const [outlineOpen, setOutlineOpen] = useState(false)
   const [healthOpen, setHealthOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  const [liveDataOpen, setLiveDataOpen] = useState(false)
+  const [liveRefreshSummary, setLiveRefreshSummary] = useState<string | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [focusDesignNonce, setFocusDesignNonce] = useState(0)
   const [publishedDeck, setPublishedDeck] = useState<PublishedDeckItem | null>(null)
@@ -2104,6 +2118,42 @@ export function App(): React.ReactElement {
         })
         return name
       }
+      if (kind === 'pptx-editable' && standaloneDev) {
+        const current = documentRef.current
+        const slideHtmls = extractSlideHtmlList(current.html)
+        const base64 = await buildEditableDeckPptx({
+          title: current.title,
+          width: geometry.width,
+          height: geometry.height,
+          look: lookRef.current,
+          slides: slidesRef.current.map((s, idx) => ({ html: slideHtmls[idx] ?? '', notes: s.notes })),
+        })
+        const name = `${fileStem(current.title)}-editable.pptx`
+        if (typeof Blob !== 'undefined' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+          const bin = atob(base64)
+          const bytes = new Uint8Array(bin.length)
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+          const blob = new Blob([bytes], {
+            type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+          })
+          const url = URL.createObjectURL(blob)
+          const link = window.document.createElement('a')
+          link.href = url
+          link.download = name
+          window.document.body.appendChild(link)
+          link.click()
+          link.remove()
+          setTimeout(() => URL.revokeObjectURL(url), 1000)
+        }
+        setProgress({
+          phase: 'done',
+          unit: slidesRef.current.length,
+          unitCount: slidesRef.current.length,
+          message: `Downloaded editable ${name}.`,
+          outputPath: name,
+        })
+        return name
+      }
       if (exportingRef.current) throw new Error('an export is already running')
       exportingRef.current = true
       cancelExportRef.current = false
@@ -2826,6 +2876,93 @@ export function App(): React.ReactElement {
             onExportPortableHtml={() => {
               downloadPortableHtml()
             }}
+            onApplySuggestion={(slideIndex: number, card: SuggestionCard) => {
+              editHtml(
+                current =>
+                  setSlideContent(current, Math.max(0, Math.min(slides.length - 1, slideIndex)), {
+                    headline: card.after,
+                  }),
+                `Applied agent suggestion on slide ${slideIndex + 1}.`,
+              )
+            }}
+          />
+          {liveDataOpen ? (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Live data bindings"
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(20,23,26,0.32)',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                zIndex: 80,
+              }}
+              onClick={() => setLiveDataOpen(false)}
+            >
+              <div
+                style={{
+                  width: 'min(420px, 94vw)',
+                  height: '100%',
+                  background: 'var(--n-sheet, #ffffff)',
+                  borderLeft: '1px solid var(--n-line, #c8ccd2)',
+                  padding: '16px',
+                  overflow: 'auto',
+                  display: 'grid',
+                  gap: '12px',
+                  alignContent: 'start',
+                }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <strong style={{ fontSize: '14px' }}>Live PureSheets Data</strong>
+                  <button type="button" onClick={() => setLiveDataOpen(false)}>Close</button>
+                </div>
+                <LiveDataPanel
+                  lastRefreshSummary={liveRefreshSummary}
+                  onInsertMetric={(ds: LiveDataset, metricKey: string) => {
+                    const m = ds.metrics.find(item => item.key === metricKey)
+                    if (!m) return
+                    const attr = bindMetricAttr(ds.id, m.key)
+                    editHtml(current => {
+                      const snippet = `<div class="stat" data-kpi="1" style="border:1px solid var(--slide-line,#d4d7dc);border-left:3px solid var(--slide-accent,#936c00);padding:14px 18px;margin-top:16px;display:inline-block"><strong data-live-bind="${attr}" style="font-size:2em;display:block">${m.value}</strong><span style="font-size:0.75em;opacity:0.75">${m.label}</span></div>`
+                      return appendSnippetToSlide(current, selectedSlide, snippet)
+                    }, `Bound live KPI "${m.label}" on slide ${selectedSlide + 1}.`)
+                    setLiveRefreshSummary(`Bound "${m.label}" (${m.value}) from ${ds.name}.`)
+                  }}
+                  onInsertTable={(ds: LiveDataset) => {
+                    const attr = bindTableAttr(ds.id)
+                    const ths = ds.table.headers.map(h => `<th>${h}</th>`).join('')
+                    const trs = ds.table.rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
+                    editHtml(current => {
+                      const snippet = `<table data-live-bind="${attr}" style="width:100%;border-collapse:collapse;margin-top:16px"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`
+                      return appendSnippetToSlide(current, selectedSlide, snippet)
+                    }, `Bound live table "${ds.name}" on slide ${selectedSlide + 1}.`)
+                    setLiveRefreshSummary(`Bound table (${ds.table.rows.length} rows) from ${ds.name}.`)
+                  }}
+                  onRefreshAll={(datasets: LiveDataset[]) => {
+                    const res = refreshHtmlLiveBindings(documentRef.current.html, datasets)
+                    if (res.updatedCount > 0) {
+                      editHtml(() => res.html, `Refreshed ${res.updatedCount} live data binding(s).`)
+                      setLiveRefreshSummary(
+                        `Refreshed ${res.updatedCount} live value(s) from ${res.sourcesUsed.map(s => s.name).join(', ')}.`,
+                      )
+                    } else {
+                      setLiveRefreshSummary('No live-bound KPIs or tables on this deck yet — click a KPI above to bind one.')
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          ) : null}
+          <WorkspaceThreadStrip
+            app="pureslides"
+            onApplyTransform={(env: TransformEnvelope) => {
+              const md = transformToSlideMarkdown(env)
+              handleApplyOutline(md, 'append')
+              setStatus(`Imported "${env.title}" from ${env.sourceApp}.`)
+            }}
           />
           <CommandPalette
             open={paletteOpen}
@@ -3064,6 +3201,7 @@ export function App(): React.ReactElement {
           onOpenOutline={() => setOutlineOpen(true)}
           onOpenHealth={() => setHealthOpen(true)}
           onOpenShare={() => setShareOpen(true)}
+          onOpenLiveData={() => setLiveDataOpen(true)}
           onOpenCommandPalette={() => setPaletteOpen(true)}
           onUndo={handleUndo}
           onRedo={handleRedo}

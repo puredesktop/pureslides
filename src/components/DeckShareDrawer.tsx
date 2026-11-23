@@ -24,6 +24,13 @@ import {
 import type { Slide } from '../lib/slides'
 import { containDialogFocus } from './dialogFocus'
 import { primaryLook, quiet } from '../ui/look'
+import {
+  buildCommentResolutionCard,
+  sendTransformEnvelope,
+  SuggestionCardsPanel,
+  type SuggestionCard,
+  type SuiteAppId,
+} from '@purescience/platform-ui/suite'
 
 export interface DeckShareDrawerProps {
   open: boolean
@@ -37,6 +44,7 @@ export interface DeckShareDrawerProps {
   onBroadcastLiveChange: (enabled: boolean) => void
   onSelectSlide: (slideIndex: number) => void
   onExportPortableHtml: () => void
+  onApplySuggestion?: (slideIndex: number, card: SuggestionCard) => void
 }
 
 export function DeckShareDrawer({
@@ -51,8 +59,10 @@ export function DeckShareDrawer({
   onBroadcastLiveChange,
   onSelectSlide,
   onExportPortableHtml,
+  onApplySuggestion,
 }: DeckShareDrawerProps): React.ReactElement | null {
   const [status, setStatus] = useState<PublishStatusResult | null>(null)
+  const [suggestions, setSuggestions] = useState<Array<{ slideIndex: number; card: SuggestionCard }>>([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -371,6 +381,26 @@ export function DeckShareDrawer({
                           </SlideJump>
                           <Author>{comment.author || 'Viewer'}</Author>
                           <span style={{ flex: 1 }} />
+                          <SmallBtn
+                            type="button"
+                            onClick={() => {
+                              const targetSlide = slides[Math.max(0, Math.min(slides.length - 1, comment.targetIndex))]
+                              const card = buildCommentResolutionCard({
+                                app: 'pureslides',
+                                targetLabel: `Slide ${comment.targetIndex + 1}${targetSlide?.headline ? ` · ${targetSlide.headline}` : ''}`,
+                                commentId: comment.id,
+                                commentAuthor: comment.author || 'Viewer',
+                                commentBody: comment.body,
+                                currentText: targetSlide?.headline || targetSlide?.support || '',
+                              })
+                              setSuggestions(prev => [{ slideIndex: comment.targetIndex, card }, ...prev])
+                              if (card.draftReply) {
+                                setReplyDrafts(prev => ({ ...prev, [comment.id]: card.draftReply! }))
+                              }
+                            }}
+                          >
+                            Fix with Agent
+                          </SmallBtn>
                           <SmallBtn type="button" onClick={() => void handleResolve(comment)}>
                             {comment.resolved ? 'Reopen' : 'Resolve'}
                           </SmallBtn>
@@ -404,6 +434,60 @@ export function DeckShareDrawer({
               ) : null}
             </>
           ) : null}
+
+          {suggestions.length > 0 ? (
+            <Section>
+              <SuggestionCardsPanel
+                cards={suggestions.map(s => s.card)}
+                onAccept={card => {
+                  const hit = suggestions.find(s => s.card.id === card.id)
+                  if (hit) onApplySuggestion?.(hit.slideIndex, card)
+                  setSuggestions(prev =>
+                    prev.map(s => (s.card.id === card.id ? { ...s, card: { ...s.card, status: 'accepted' } } : s)),
+                  )
+                  setNotice(`Applied agent edit on ${card.targetLabel}.`)
+                }}
+                onReject={card => {
+                  setSuggestions(prev =>
+                    prev.map(s => (s.card.id === card.id ? { ...s, card: { ...s.card, status: 'rejected' } } : s)),
+                  )
+                }}
+              />
+            </Section>
+          ) : null}
+
+          <Section>
+            <SectionHead>Transform / Send to another Pure app</SectionHead>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {(
+                [
+                  { target: 'puresite', label: 'Send to PureSite' },
+                  { target: 'canvas2', label: 'Send to PureCanvas' },
+                  { target: 'purewriter', label: 'Send to PureWriter' },
+                ] as Array<{ target: SuiteAppId; label: string }>
+              ).map(dest => (
+                <QuietBtn
+                  key={dest.target}
+                  type="button"
+                  onClick={() => {
+                    void sendTransformEnvelope({
+                      sourceApp: 'pureslides',
+                      targetApp: dest.target,
+                      title,
+                      subtitle: `${slides.length}-slide presentation`,
+                      sections: slides.map((s, idx) => ({
+                        heading: s.headline || `Slide ${idx + 1}`,
+                        ...(s.support ? { body: s.support } : {}),
+                        ...(s.notes ? { notes: s.notes } : {}),
+                      })),
+                    }).then(() => setNotice(`Sent "${title}" to ${dest.label.replace('Send to ', '')}.`))
+                  }}
+                >
+                  {dest.label}
+                </QuietBtn>
+              ))}
+            </div>
+          </Section>
 
           {notice ? <Notice>{notice}</Notice> : null}
           {error ? <ErrorMsg role="alert">{error}</ErrorMsg> : null}

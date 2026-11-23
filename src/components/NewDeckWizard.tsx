@@ -19,6 +19,7 @@ import { ASSET_ROLES, type MaterialItem } from '../lib/material'
 import type { AssetRole } from '../lib/assetNotes'
 import type { DeckGeometry } from '../types'
 import { primaryLook, quiet } from '../ui/look'
+import { PlaybooksShelf, type PlaybookDefinition } from '@purescience/platform-ui/suite'
 
 const FRAMES = [
   { id: '16-9', label: '16:9', width: 1280, height: 720, note: 'Projectors and laptops' },
@@ -115,6 +116,14 @@ export function NewDeckWizard({
     <Scrim>
       <Dialog role="dialog" aria-modal="true" aria-labelledby="new-deck-title" onKeyDown={containDialogFocus}>
         <Title id="new-deck-title">Start a new story</Title>
+
+        <PlaybooksShelf
+          app="slides"
+          onRunPlaybook={(pb: PlaybookDefinition) => {
+            onBrief(pb.agentRecipe || pb.description)
+            if (pb.brandPreset) onLook(pb.brandPreset)
+          }}
+        />
 
         <Field>
           <Label htmlFor="wizard-brief">What is it for?</Label>

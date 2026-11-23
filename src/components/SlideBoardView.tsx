@@ -112,6 +112,7 @@ interface SlideBoardViewProps {
   onOpenOutline?: () => void
   onOpenHealth?: () => void
   onOpenShare?: () => void
+  onOpenLiveData?: () => void
   onOpenCommandPalette?: () => void
   onUndo?: () => void
   onRedo?: () => void
@@ -176,6 +177,7 @@ export function SlideBoardView({
   onOpenOutline,
   onOpenHealth,
   onOpenShare,
+  onOpenLiveData,
   onOpenCommandPalette,
   onUndo,
   onRedo,
@@ -641,6 +643,15 @@ export function SlideBoardView({
             HTML
           </HtmlButton>
           <HtmlButton type="button" aria-pressed={inspectorOpen} onClick={() => setInspectorOpen(value => !value)} title="Show or hide slide inspector">Inspector</HtmlButton>
+          {onOpenLiveData ? (
+            <HtmlButton
+              type="button"
+              onClick={onOpenLiveData}
+              title="Bind or refresh live KPIs & tables from PureSheets / PureCloud"
+            >
+              Live data
+            </HtmlButton>
+          ) : null}
           {onOpenShare ? (
             <HtmlButton type="button" onClick={onOpenShare} title="Publish live web deck & Audience Q&A">
               {isLiveShared ? '● Share' : 'Share'}
