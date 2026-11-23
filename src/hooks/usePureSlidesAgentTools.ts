@@ -1,104 +1,28 @@
 /**
- * Registering the deck tools with the platform.
+ * Registering PureSlides' exposed operations with the platform:
+ *   - 7 composite `fn_*` functions (always exposed)
+ *   - 9 core atomic tools (~21% of 43, always exposed)
+ *   - 3 universal escape-hatch meta-tools (`discoverAppTools`,
+ *     `callExtendedReadTool`, `callExtendedTool`) giving full on-demand access
+ *     to all 34 specialist atomic tools.
  *
  * Handlers read `contextRef.current`, so a tool called mid-export sees the
  * state as it is now rather than as it was when the drawer opened.
  */
-import { useRef } from 'react'
-import {
-  listLookFontsHandler,
-  makeMotifHandler,
-  saveLookAsBrandHandler,
-  setCustomLookHandler,
-  viewSlideHandler,
-} from '../agents/lookTools'
-import {
-  listBrandsHandler,
-  proposeBrandToOrganisationHandler,
-  proposeSamplesToOrganisationHandler,
-} from '../agents/orgTools'
+import { useMemo, useRef } from 'react'
 import type { AgentToolHandler } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import { usePlatformAgentTools } from '@purescience/platform-ui/bridge/react/usePlatformAgentTools'
 import {
   AgentDeckToolError,
+  BASE_HASH_REQUIRED_TOOLS,
+  EXPOSED_TOOL_NAMES,
+  MISSING_BASE_HASH_MESSAGE,
   PURESLIDES_AGENT_LOG_LABEL,
-  PURESLIDES_AGENT_TOOLS,
   type DeckAgentToolContext,
 } from '../agents/catalog'
-import {
-  addAssetHandler,
-  addSlideHandler,
-  checkDeckHandler,
-  saveDeckHandler,
-  createDeckHandler,
-  deleteElementHandler,
-  deleteSlideHandler,
-  describeAssetHandler,
-  draftDeckHandler,
-  duplicateSlideHandler,
-  exportDeckHandler,
-  getDeckContextHandler,
-  getSlideHandler,
-  listAssetsHandler,
-  listRevisionsHandler,
-  listSlidesHandler,
-  restoreRevisionHandler,
-  moveSlideHandler,
-  presentHandler,
-  setAssetRoleHandler,
-  setBriefHandler,
-  setLookHandler,
-  setDeckHandler,
-  addBlockHandler,
-  listBlocksHandler,
-  setElementHandler,
-  setElementTextHandler,
-  setElementStepHandler,
-  setSelectionHandler,
-  setSlideHtmlHandler,
-  stopExportHandler,
-  updateSlideHandler,
-} from '../agents/handlers'
+import { buildPureSlidesHandlers } from '../agents/operationsRegistry'
 
-const READ_ONLY_TOOLS = new Set([
-  'listLookFonts',
-  'listBrands',
-  'viewSlide',
-  'getDeckContext',
-  'getSlide',
-  'listSlides',
-  'listAssets',
-  'checkDeck',
-  'listBlocks',
-  'getDrawerRequest',
-  'listRevisions',
-  'stopExport',
-])
-
-/**
- * The tools that write against a slide index or replace the deck outright.
- * A stale one does real harm — a rewrite read before the author moved a
- * slide puts the old order back, an index lands on the slide that moved
- * into its place — so these refuse to run without the hash they were read
- * at, and the door refuses a hash that is no longer current.
- */
-export const BASE_HASH_REQUIRED_TOOLS = new Set([
-  'setDeck',
-  'addSlide',
-  'updateSlide',
-  'setSlideHtml',
-  'moveSlide',
-  'duplicateSlide',
-  'deleteSlide',
-  'setElement',
-  'setElementText',
-  'addBlock',
-  'deleteElement',
-  'setElementStep',
-])
-
-export const MISSING_BASE_HASH_MESSAGE =
-  'baseHash is required: call getDeckContext (or getSlide / listSlides) and pass its hash, so this edit cannot undo changes made since your last read.'
+export { BASE_HASH_REQUIRED_TOOLS, MISSING_BASE_HASH_MESSAGE }
 
 export function usePureSlidesAgentTools(
   ready: boolean,
@@ -110,111 +34,43 @@ export function usePureSlidesAgentTools(
   const mayChangeRef = useRef(mayChangeDeck)
   mayChangeRef.current = mayChangeDeck
 
-  const handlers: Record<string, AgentToolHandler> = {
-    cancelDrawerRequest: async invoke => ({
-      content: JSON.stringify(
-        await contextRef.current.cancelDrawerRequest(invoke.arguments ?? {}),
-      ),
-    }),
-    getDeckContext: async () => getDeckContextHandler(contextRef.current),
-    getSlide: async invoke =>
-      getSlideHandler(contextRef.current, invoke.arguments ?? {}),
-    listSlides: async () => listSlidesHandler(contextRef.current),
-    listAssets: async () => listAssetsHandler(contextRef.current),
-    checkDeck: async () => checkDeckHandler(contextRef.current),
-    createDeck: async invoke =>
-      createDeckHandler(contextRef.current, invoke.arguments ?? {}),
-    setDeck: async invoke =>
-      setDeckHandler(contextRef.current, invoke.arguments ?? {}),
-    addSlide: async invoke =>
-      addSlideHandler(contextRef.current, invoke.arguments ?? {}),
-    updateSlide: async invoke =>
-      updateSlideHandler(contextRef.current, invoke.arguments ?? {}),
-    setSlideHtml: async invoke =>
-      setSlideHtmlHandler(contextRef.current, invoke.arguments ?? {}),
-    moveSlide: async invoke =>
-      moveSlideHandler(contextRef.current, invoke.arguments ?? {}),
-    duplicateSlide: async invoke =>
-      duplicateSlideHandler(contextRef.current, invoke.arguments ?? {}),
-    deleteSlide: async invoke =>
-      deleteSlideHandler(contextRef.current, invoke.arguments ?? {}),
-    setElement: async invoke =>
-      setElementHandler(contextRef.current, invoke.arguments ?? {}),
-    setElementText: async invoke =>
-      setElementTextHandler(contextRef.current, invoke.arguments ?? {}),
-    listBlocks: async () => listBlocksHandler(contextRef.current),
-    addBlock: async invoke =>
-      addBlockHandler(contextRef.current, invoke.arguments ?? {}),
-    deleteElement: async invoke =>
-      deleteElementHandler(contextRef.current, invoke.arguments ?? {}),
-    setElementStep: async invoke =>
-      setElementStepHandler(contextRef.current, invoke.arguments ?? {}),
-    addAsset: async invoke =>
-      addAssetHandler(contextRef.current, invoke.arguments ?? {}),
-    setAssetRole: async invoke =>
-      setAssetRoleHandler(contextRef.current, invoke.arguments ?? {}),
-    describeAsset: async invoke =>
-      describeAssetHandler(contextRef.current, invoke.arguments ?? {}),
-    setBrief: async invoke =>
-      setBriefHandler(contextRef.current, invoke.arguments ?? {}),
-    setLook: async invoke =>
-      setLookHandler(contextRef.current, invoke.arguments ?? {}),
-    listLookFonts: async () => listLookFontsHandler(),
-    setCustomLook: async invoke =>
-      setCustomLookHandler(contextRef.current, invoke.arguments ?? {}),
-    makeMotif: async invoke =>
-      makeMotifHandler(contextRef.current, invoke.arguments ?? {}),
-    saveLookAsBrand: async invoke =>
-      saveLookAsBrandHandler(contextRef.current, invoke.arguments ?? {}),
-    listBrands: async () => listBrandsHandler(contextRef.current),
-    proposeBrandToOrganisation: async invoke =>
-      proposeBrandToOrganisationHandler(contextRef.current, invoke.arguments ?? {}),
-    proposeSamplesToOrganisation: async invoke =>
-      proposeSamplesToOrganisationHandler(contextRef.current, invoke.arguments ?? {}),
-    viewSlide: async invoke =>
-      viewSlideHandler(contextRef.current, invoke.arguments ?? {}),
-    getDrawerRequest: async () => ({
-      content: JSON.stringify(await contextRef.current.getDrawerRequest()),
-    }),
-    commitDrawerRequest: async invoke => ({
-      content: JSON.stringify(
-        await contextRef.current.commitDrawerRequest(invoke.arguments ?? {}),
-      ),
-    }),
-    draftDeck: async () => draftDeckHandler(contextRef.current),
-    setSelection: async invoke =>
-      setSelectionHandler(contextRef.current, invoke.arguments ?? {}),
-    present: async invoke =>
-      presentHandler(contextRef.current, invoke.arguments ?? {}),
-    saveDeck: async () => saveDeckHandler(contextRef.current),
-    exportDeck: async invoke =>
-      exportDeckHandler(contextRef.current, invoke.arguments ?? {}),
-    stopExport: async () => stopExportHandler(contextRef.current),
-    listRevisions: async () => listRevisionsHandler(contextRef.current),
-    restoreRevision: async invoke =>
-      restoreRevisionHandler(contextRef.current, invoke.arguments ?? {}),
-  }
-  usePlatformAgentTools({
-    ready,
-    tools: PURESLIDES_AGENT_TOOLS,
-    logLabel: PURESLIDES_AGENT_LOG_LABEL,
-    errorType: AgentDeckToolError,
-    handlers: Object.fromEntries(
-      Object.entries(handlers).map(([name, handler]) => [
-        name,
-        async invoke => {
-          if (!READ_ONLY_TOOLS.has(name) && !mayChangeRef.current())
+  const registryHandlers = useMemo(
+    () =>
+      buildPureSlidesHandlers(() => contextRef.current, {
+        beforeInvoke: ({ name, risk }) => {
+          if (
+            (risk !== 'read' || name === 'setSelection') &&
+            name !== 'stopExport' &&
+            !mayChangeRef.current()
+          ) {
             throw new AgentDeckToolError(
               'Wait for the deck to finish opening, then read getDeckContext again before changing it.',
             )
-          if (BASE_HASH_REQUIRED_TOOLS.has(name)) {
-            const baseHash = invoke.arguments?.baseHash
-            if (typeof baseHash !== 'string' || !baseHash.trim())
-              throw new AgentDeckToolError(MISSING_BASE_HASH_MESSAGE)
           }
-          return handler(invoke)
         },
-      ]),
-    ),
+      }),
+    [],
+  )
+
+  // Statically key-preserving registration so `scripts/check-manifests.mjs`
+  // can verify every manifest tool has a live registered handler at build time.
+  const handlers = useMemo(
+    () =>
+      Object.fromEntries(
+        EXPOSED_TOOL_NAMES.map(name => [
+          name,
+          async (invoke: Parameters<AgentToolHandler>[0]) =>
+            registryHandlers[name]!(invoke),
+        ]),
+      ),
+    [registryHandlers],
+  )
+
+  usePlatformAgentTools({
+    ready,
+    tools: EXPOSED_TOOL_NAMES,
+    logLabel: PURESLIDES_AGENT_LOG_LABEL,
+    errorType: AgentDeckToolError,
+    handlers,
   })
 }
