@@ -54,9 +54,14 @@ const KINDS: { id: ExportKind; label: string; note: string }[] = [
   },
   { id: 'images', label: 'Images', note: 'Every slide as a PNG, numbered.' },
   {
+    id: 'pptx-editable',
+    label: 'PowerPoint (Editable)',
+    note: 'Native editable PowerPoint (.pptx) with real text boxes, bullets, KPI cards, tables, and speaker notes — open and edit directly in PowerPoint, Keynote, or Google Slides.',
+  },
+  {
     id: 'pptx',
-    label: 'PowerPoint',
-    note: 'One picture slide per slide, exactly as the board shows it, speaker notes attached, and every video placed as a real clip that plays. Opens in PowerPoint, Keynote and Google Slides; the text is a picture, not type.',
+    label: 'PowerPoint (Exact Pixel)',
+    note: 'One picture slide per slide, pixel-identical to the board, with speaker notes and playable videos overlaid.',
   },
   {
     id: 'video',
@@ -102,7 +107,7 @@ export function ExportDialog({
   const layoutFailed = verification.state === 'failed'
   const layoutChecking = verification.state === 'checking'
   const blocked =
-    kind === 'html' && standaloneDev
+    (kind === 'html' || kind === 'pptx-editable') && standaloneDev
       ? hasBlockingFinding(findings)
       : hasBlockingFinding(findings) || layoutFailed
   const blocking = findings.filter(finding => finding.severity === 'error')

@@ -39,7 +39,8 @@ import {
 import { checkDeck } from './checkDeck'
 import { hashDeck } from './deckDoor'
 import { geometryFromHtml } from './deckDocument'
-import { buildDeckPptx, type PptxVideo } from './deckPptx'
+import { buildDeckPptx, buildEditableDeckPptx, extractSlideHtmlList, type PptxVideo } from './deckPptx'
+import { lookFromHtml } from './deckLooks'
 import { buildPortableDeckHtml } from './portableDeckHtml'
 import type { PreviewAssetMap } from './packageAssets'
 import type { VideoPlacement } from './videoPlacements'
@@ -81,7 +82,7 @@ export interface ExportVerification {
   failedMessage: () => string
 }
 
-export type ExportKind = 'pdf' | 'images' | 'video' | 'pptx' | 'html'
+export type ExportKind = 'pdf' | 'images' | 'video' | 'pptx' | 'pptx-editable' | 'html'
 
 export interface ExportProgressState {
   phase: 'idle' | 'preparing' | 'working' | 'done' | 'error'
@@ -592,6 +593,33 @@ export async function exportDeck(request: ExportRequest): Promise<ExportResult> 
       outputPath,
     })
     return { kind, outputPath, units: slides.length, sheets, expectedSheets: expected }
+  }
+
+  if (kind === 'pptx-editable') {
+    report({
+      phase: 'working',
+      unit: 0,
+      unitCount: slides.length,
+      message: 'Building editable PowerPoint slides…',
+    })
+    const slideHtmls = extractSlideHtmlList(html)
+    const base64 = await buildEditableDeckPptx({
+      title,
+      width: geometry.width,
+      height: geometry.height,
+      look: lookFromHtml(html) ?? undefined,
+      slides: slides.map((s, idx) => ({ html: slideHtmls[idx] ?? '', notes: s.notes })),
+    })
+    const outputPath = `${exportsDir}/${stem}-editable.pptx`
+    await writeBinaryFile(outputPath, base64)
+    report({
+      phase: 'done',
+      unit: slides.length,
+      unitCount: slides.length,
+      message: `Wrote editable ${outputPath.split('/').pop()}.`,
+      outputPath,
+    })
+    return { kind, outputPath, units: slides.length }
   }
 
   // Images, PowerPoint and video all capture frames; they differ in which
