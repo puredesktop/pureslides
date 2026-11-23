@@ -56,20 +56,62 @@ export interface ImageRequest {
   outputFormat?: 'png' | 'jpeg' | 'webp'
 }
 
-export const PURESLIDES_AGENT_TOOLS = [
+/**
+ * Exposed PureSlides operations (must stay in sync 1:1 with `plugin.json` -> `app.agents.tools[].name`).
+ *
+ * 3-tier exposure (built on `@purescience/platform-ui/bridge/appFunctions`):
+ *   1. 7 composite `function` workflows (`fn_*`) — replace 3–12 atomic round-trips each
+ *   2. 9 core atomic tools (~21% of 43) — indispensable direct read/edit/vision/export verbs
+ *   3. 3 universal escape-hatch meta-tools (`discoverAppTools`, `callExtendedReadTool`, `callExtendedTool`)
+ *      providing full on-demand access to the remaining 34 specialist atomic tools.
+ */
+export const PURESLIDES_FUNCTION_NAMES = [
+  'fn_deckOutlineAndBriefing',
+  'fn_scaffoldSlidesFromOutline',
+  'fn_visualAndLayoutAudit',
+  'fn_polishDeckThemeAndFixes',
+  'fn_speakerNotesAndPacingReview',
+  'fn_batchUpdateSpeakerNotes',
+  'fn_exportReadinessCheck',
+] as const
+
+export const PURESLIDES_CORE_TOOL_NAMES = [
   'getDeckContext',
   'getSlide',
+  'addSlide',
+  'updateSlide',
+  'setSlideHtml',
+  'deleteSlide',
+  'viewSlide',
+  'saveDeck',
+  'exportDeck',
+] as const
+
+export const PURESLIDES_META_TOOL_NAMES = [
+  'discoverAppTools',
+  'callExtendedReadTool',
+  'callExtendedTool',
+] as const
+
+export const EXPOSED_TOOL_NAMES = [
+  ...PURESLIDES_FUNCTION_NAMES,
+  ...PURESLIDES_CORE_TOOL_NAMES,
+  ...PURESLIDES_META_TOOL_NAMES,
+] as const
+
+export const PURESLIDES_AGENT_TOOLS = EXPOSED_TOOL_NAMES
+
+export const PURESLIDES_EXTENDED_TOOL_NAMES = [
+  'cancelDrawerRequest',
+  'getDrawerRequest',
+  'commitDrawerRequest',
   'listSlides',
   'listAssets',
   'checkDeck',
   'createDeck',
   'setDeck',
-  'addSlide',
-  'updateSlide',
-  'setSlideHtml',
   'moveSlide',
   'duplicateSlide',
-  'deleteSlide',
   'setElement',
   'setElementText',
   'listBlocks',
@@ -88,23 +130,46 @@ export const PURESLIDES_AGENT_TOOLS = [
   'listBrands',
   'proposeBrandToOrganisation',
   'proposeSamplesToOrganisation',
-  'viewSlide',
   'draftDeck',
-  'getDrawerRequest',
-  'cancelDrawerRequest',
-  'commitDrawerRequest',
   'setSelection',
   'present',
-  'saveDeck',
-  'exportDeck',
   'stopExport',
   'listRevisions',
   'restoreRevision',
 ] as const
 
+export const PURESLIDES_ALL_ATOMIC_TOOL_NAMES = [
+  ...PURESLIDES_CORE_TOOL_NAMES,
+  ...PURESLIDES_EXTENDED_TOOL_NAMES,
+] as const
+
 export const PURESLIDES_AGENT_LOG_LABEL = 'pureslides4'
 
 export class AgentDeckToolError extends Error {}
+
+/**
+ * Atomic tools that write against a slide index or replace the deck outright.
+ * A stale edit can undo user changes or target the wrong slide, so these refuse
+ * to run without a non-empty `baseHash` (both when called directly and through
+ * `callExtendedTool`).
+ */
+export const BASE_HASH_REQUIRED_TOOLS = new Set<string>([
+  'setDeck',
+  'addSlide',
+  'updateSlide',
+  'setSlideHtml',
+  'moveSlide',
+  'duplicateSlide',
+  'deleteSlide',
+  'setElement',
+  'setElementText',
+  'addBlock',
+  'deleteElement',
+  'setElementStep',
+])
+
+export const MISSING_BASE_HASH_MESSAGE =
+  'baseHash is required: call getDeckContext (or getSlide / listSlides) and pass its hash, so this edit cannot undo changes made since your last read.'
 
 export type GeometryPatch = { width?: number; height?: number }
 
