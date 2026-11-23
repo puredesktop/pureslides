@@ -38,6 +38,28 @@ import { PresentWindow } from './components/PresentWindow'
 import { ExportDialog } from './components/ExportDialog'
 import { HtmlDialog } from './components/HtmlDialog'
 import { HistoryDialog } from './components/HistoryDialog'
+import { OutlineStudioModal } from './components/OutlineStudioModal'
+import { DeckHealthDrawer } from './components/DeckHealthDrawer'
+import { DeckShareDrawer } from './components/DeckShareDrawer'
+import { CommandPalette } from './components/CommandPalette'
+import {
+  insertSlideElement,
+  remixSlideLayout,
+  type InsertableElementKind,
+  type RemixableBlockId,
+} from './lib/layoutRemix'
+import {
+  createStandaloneSampleDeck,
+  outlineToDeckHtml,
+} from './lib/outlineToDeck'
+import { buildPortableDeckHtml } from './lib/portableDeckHtml'
+import {
+  autoFixHighContrastLook,
+  autoFixRenumberSteps,
+  autoFixTrimBlankSlides,
+} from './lib/deckHealth'
+import type { PublishedDeckItem } from './lib/pureCloudDeckClient'
+import type { CustomLookSpec } from './lib/customLook'
 import type { StatusAction } from './components/SlideBoardView'
 import { usePureSlidesAgentTools } from './hooks/usePureSlidesAgentTools'
 import {
@@ -148,6 +170,7 @@ import {
   ExportCancelled,
   assertDeckExportable,
   exportDeck,
+  fileStem,
   renderSlidePicture,
 } from './lib/exportDeck'
 import { base64FromBytes } from './lib/encodeMp4'
@@ -263,10 +286,10 @@ export function App(): React.ReactElement {
     usePlatformViewportResource(ready && !standaloneDev, meta)
 
   const [document, setDocument] = useState<DeckDocument>(() =>
-    createDefaultDeckDocument(),
+    standaloneDev ? createStandaloneSampleDeck() : createDefaultDeckDocument(),
   )
   const [documentPath, setDocumentPath] = useState<string | null>(null)
-  const [documentStarted, setDocumentStarted] = useState(false)
+  const [documentStarted, setDocumentStarted] = useState(() => standaloneDev)
   const [switcherOpen, setSwitcherOpen] = useState(false)
   const [status, setStatus] = useState('')
   const [switching, setSwitching] = useState(false)
@@ -346,6 +369,16 @@ export function App(): React.ReactElement {
   const [lastExportPath, setLastExportPath] = useState<string | null>(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [restoring, setRestoring] = useState(false)
+  const [viewMode, setViewMode] = useState<'stage' | 'grid'>('stage')
+  const [outlineOpen, setOutlineOpen] = useState(false)
+  const [healthOpen, setHealthOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [focusDesignNonce, setFocusDesignNonce] = useState(0)
+  const [publishedDeck, setPublishedDeck] = useState<PublishedDeckItem | null>(null)
+  const [broadcastLive, setBroadcastLive] = useState(false)
+  const undoStackRef = useRef<DeckDocument[]>([])
+  const redoStackRef = useRef<DeckDocument[]>([])
 
   const documentRef = useRef(document)
   // The content hash beside the content: what every edit names as its base.
@@ -535,9 +568,9 @@ export function App(): React.ReactElement {
         return
       }
       setDocumentNow(next)
-      lifecycleRef.current.markDirty()
+      if (!standaloneDev) lifecycleRef.current.markDirty()
     },
-    [setDocumentNow],
+    [setDocumentNow, standaloneDev],
   )
 
   /**
@@ -617,6 +650,9 @@ export function App(): React.ReactElement {
       } else if (policy.snapshot === 'first-manual-after-revision') {
         history.record(current.html, 'manual-edit')
       }
+      undoStackRef.current.push(current)
+      if (undoStackRef.current.length > 50) undoStackRef.current.shift()
+      redoStackRef.current = []
       applyDocument({ title, html: plan.html })
       if (isRevisionOrigin(request.origin)) {
         setUndoOffer(snapshot)
@@ -1933,8 +1969,141 @@ export function App(): React.ReactElement {
     return path
   }, [])
 
+  const downloadPortableHtml = useCallback((): string => {
+    const current = documentRef.current
+    const stem = fileStem(current.title)
+    const fileName = `${stem}.html`
+    const portable = buildPortableDeckHtml(current.html, {
+      title: current.title,
+      previews: previewsRef.current,
+    })
+    if (typeof Blob !== 'undefined' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+      const blob = new Blob([portable], { type: 'text/html;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = window.document.createElement('a')
+      link.href = url
+      link.download = fileName
+      window.document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    }
+    setStatus(`Downloaded ${fileName}.`)
+    return fileName
+  }, [])
+
+  const handleUndo = useCallback((): void => {
+    const previous = undoStackRef.current.pop()
+    if (!previous) {
+      setStatus('Nothing to undo.')
+      return
+    }
+    redoStackRef.current.push(documentRef.current)
+    applyDocument(previous)
+    setStatus('Undid last change.')
+  }, [applyDocument])
+
+  const handleRedo = useCallback((): void => {
+    const next = redoStackRef.current.pop()
+    if (!next) {
+      setStatus('Nothing to redo.')
+      return
+    }
+    undoStackRef.current.push(documentRef.current)
+    applyDocument(next)
+    setStatus('Redid change.')
+  }, [applyDocument])
+
+  const handleApplyCustomLook = useCallback(
+    (spec: CustomLookSpec): void => {
+      const result = editHtml(
+        html => withCustomLook(html, spec),
+        'Theme updated.',
+      )
+      if (result.ok) {
+        lookChosenRef.current = true
+        lookRef.current = 'custom'
+        setLook('custom')
+        if (!standaloneDev) lifecycleRef.current.markDirty()
+      }
+    },
+    [editHtml, standaloneDev],
+  )
+
+  const handleRemixSlide = useCallback(
+    (index: number, targetBlockId: RemixableBlockId): void => {
+      editHtml(
+        html => remixSlideLayout(html, index, targetBlockId),
+        `Remixed slide ${index + 1} to ${targetBlockId}.`,
+      )
+    },
+    [editHtml],
+  )
+
+  const handleInsertElement = useCallback(
+    (index: number, kind: InsertableElementKind): void => {
+      editHtml(
+        html => insertSlideElement(html, index, kind),
+        `Inserted ${kind} on slide ${index + 1}.`,
+      )
+    },
+    [editHtml],
+  )
+
+  const handleApplyOutline = useCallback(
+    (markdown: string, mode: 'replace' | 'append'): void => {
+      const result = editDeck({
+        transform: html => outlineToDeckHtml(html, markdown, mode).html,
+        origin: 'manual',
+        label:
+          mode === 'replace'
+            ? 'Generated slides from Markdown outline.'
+            : 'Appended slides from Markdown outline.',
+      })
+      if (result.ok) {
+        const nextSlides = slidesFromHtml(documentRef.current.html)
+        setSelectedSlide(mode === 'replace' ? 0 : Math.max(0, nextSlides.length - 1))
+        setBoardTab('slides')
+      }
+    },
+    [editDeck],
+  )
+
+  const handleAutoFixSteps = useCallback((): void => {
+    editHtml(autoFixRenumberSteps, 'Renumbered build steps sequentially.')
+  }, [editHtml])
+
+  const handleAutoFixContrast = useCallback((): void => {
+    const result = editHtml(autoFixHighContrastLook, 'Switched to high-contrast Clear look.')
+    if (result.ok) {
+      lookChosenRef.current = true
+      lookRef.current = 'clear'
+      setLook('clear')
+      if (!standaloneDev) lifecycleRef.current.markDirty()
+    }
+  }, [editHtml, standaloneDev])
+
+  const handleAutoFixTrimBlanks = useCallback((): void => {
+    const result = editHtml(autoFixTrimBlankSlides, 'Trimmed blank trailing slides.')
+    if (result.ok) {
+      const count = slidesFromHtml(documentRef.current.html).length
+      setSelectedSlide(prev => Math.max(0, Math.min(prev, count - 1)))
+    }
+  }, [editHtml])
+
   const runExport = useCallback(
     async (kind: ExportKind, notesAppendix: boolean): Promise<string> => {
+      if (kind === 'html' && standaloneDev) {
+        const name = downloadPortableHtml()
+        setProgress({
+          phase: 'done',
+          unit: slidesRef.current.length,
+          unitCount: slidesRef.current.length,
+          message: `Downloaded ${name}.`,
+          outputPath: name,
+        })
+        return name
+      }
       if (exportingRef.current) throw new Error('an export is already running')
       exportingRef.current = true
       cancelExportRef.current = false
@@ -1993,6 +2162,7 @@ export function App(): React.ReactElement {
           onProgress: setProgress,
           shouldCancel: () => cancelExportRef.current,
           verify,
+          previews: previewsRef.current,
           ...(videos?.length ? { videos } : {}),
         })
         setLastExportPath(result.outputPath)
@@ -2013,6 +2183,8 @@ export function App(): React.ReactElement {
             : kind === 'images'
             ? `Exported ${result.units} images.`
             : kind === 'pptx'
+            ? `Exported ${fileNameFromPath(result.outputPath)}.`
+            : kind === 'html'
             ? `Exported ${fileNameFromPath(result.outputPath)}.`
             : /\.mp4$/i.test(result.outputPath)
             ? `Exported ${fileNameFromPath(result.outputPath)}.`
@@ -2046,7 +2218,7 @@ export function App(): React.ReactElement {
         exportingRef.current = false
       }
     },
-    [recheckLayout, saveDeck],
+    [recheckLayout, saveDeck, standaloneDev, downloadPortableHtml],
   )
 
   const stopExport = useCallback((): boolean => {
@@ -2581,6 +2753,9 @@ export function App(): React.ReactElement {
             from={presentFrom}
             onPositionChange={setSelectedSlide}
             onApplyTimings={applyRehearsalTimings}
+            publishedDeckId={publishedDeck?.id ?? null}
+            broadcastLive={broadcastLive}
+            onBroadcastLiveChange={setBroadcastLive}
           />
           <ExportDialog
             open={exportOpen}
@@ -2595,6 +2770,7 @@ export function App(): React.ReactElement {
             progress={progress}
             lastExportPath={lastExportPath}
             verification={verification}
+            standaloneDev={standaloneDev}
             onExport={(kind, notesAppendix) =>
               void runExport(kind, notesAppendix).catch(() => {
                 /* refused — the status line and the dialog already say why */
@@ -2606,6 +2782,95 @@ export function App(): React.ReactElement {
               setBoardTab('slides')
               setSelectedSlide(index)
             }}
+          />
+          <OutlineStudioModal
+            open={outlineOpen}
+            onClose={() => setOutlineOpen(false)}
+            onApply={handleApplyOutline}
+          />
+          <DeckHealthDrawer
+            open={healthOpen}
+            onClose={() => setHealthOpen(false)}
+            html={document.html}
+            verification={verification}
+            availableAssets={
+              documentPath && materialLoadedPath === documentPath
+                ? material.map(item => item.name)
+                : undefined
+            }
+            onSelectSlide={index => {
+              setBoardTab('slides')
+              setViewMode('stage')
+              setSelectedSlide(index)
+            }}
+            onRecheck={() => void recheckLayout()}
+            onAutoFixSteps={handleAutoFixSteps}
+            onAutoFixContrast={handleAutoFixContrast}
+            onAutoFixTrimBlanks={handleAutoFixTrimBlanks}
+          />
+          <DeckShareDrawer
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            title={document.title}
+            html={document.html}
+            slides={slides}
+            publishedDeck={publishedDeck}
+            onPublishedDeckChange={setPublishedDeck}
+            broadcastLive={broadcastLive}
+            onBroadcastLiveChange={setBroadcastLive}
+            onSelectSlide={index => {
+              setBoardTab('slides')
+              setViewMode('stage')
+              setSelectedSlide(index)
+            }}
+            onExportPortableHtml={() => {
+              downloadPortableHtml()
+            }}
+          />
+          <CommandPalette
+            open={paletteOpen}
+            onClose={() => setPaletteOpen(false)}
+            slides={slides}
+            onSelectSlide={index => {
+              setBoardTab('slides')
+              setViewMode('stage')
+              setSelectedSlide(index)
+            }}
+            onAddBlock={blockId => {
+              addSlideAtEnd(blockId)
+              setBoardTab('slides')
+            }}
+            onApplyLook={next => {
+              const result = editHtml(html => withDeckLook(html, next), 'Presentation style updated.')
+              if (result.ok) {
+                lookChosenRef.current = true
+                lookRef.current = next
+                setLook(next)
+                if (!standaloneDev) lifecycleRef.current.markDirty()
+              }
+            }}
+            onPresent={() => {
+              setPresentFrom(selectedSlide)
+              setPresentOpen(true)
+            }}
+            onToggleGrid={() => {
+              setBoardTab('slides')
+              setViewMode(m => (m === 'grid' ? 'stage' : 'grid'))
+            }}
+            onOpenOutline={() => setOutlineOpen(true)}
+            onOpenThemeStudio={() => {
+              setBoardTab('slides')
+              setFocusDesignNonce(n => n + 1)
+            }}
+            onOpenHealth={() => setHealthOpen(true)}
+            onOpenShare={() => setShareOpen(true)}
+            onOpenExport={() => setExportOpen(true)}
+            onExportPortableHtml={() => {
+              downloadPortableHtml()
+            }}
+            onDuplicateSlide={() => duplicateSlideAt(selectedSlide)}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
           />
           <HtmlDialog
             open={htmlOpen}
@@ -2791,6 +3056,20 @@ export function App(): React.ReactElement {
           documentPath={lifecycle.doc.path ?? documentPath}
           compact={compact}
           deckTitle={document.title?.trim() || (lifecycle.doc.path ? fileNameFromPath(lifecycle.doc.path) : '')}
+          viewMode={viewMode}
+          onViewMode={setViewMode}
+          onApplyCustomLook={handleApplyCustomLook}
+          onRemixSlide={handleRemixSlide}
+          onInsertElement={handleInsertElement}
+          onOpenOutline={() => setOutlineOpen(true)}
+          onOpenHealth={() => setHealthOpen(true)}
+          onOpenShare={() => setShareOpen(true)}
+          onOpenCommandPalette={() => setPaletteOpen(true)}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          isLiveShared={Boolean(publishedDeck?.id)}
+          standaloneDev={standaloneDev}
+          focusDesignNonce={focusDesignNonce}
         />
       ) : compact ? (
         <CompactNoDeck />

@@ -37,9 +37,16 @@ interface ExportDialogProps {
   onReveal: (path: string) => void
   /** Jump directly to a slide with a warning or layout failure. */
   onSelectSlide?: (slideIndex: number) => void
+  /** Optional direct Portable HTML browser download (used in standalone dev mode). */
+  standaloneDev?: boolean
 }
 
 const KINDS: { id: ExportKind; label: string; note: string }[] = [
+  {
+    id: 'html',
+    label: 'Portable HTML',
+    note: 'One self-contained .html presentation with built-in keyboard, touch, grid, blackout, whiteout, and fullscreen player. Zero dependencies — works offline anywhere.',
+  },
   {
     id: 'pdf',
     label: 'PDF',
@@ -71,8 +78,9 @@ export function ExportDialog({
   onCancel,
   onReveal,
   onSelectSlide,
+  standaloneDev = false,
 }: ExportDialogProps): React.ReactElement | null {
-  const [kind, setKind] = useState<ExportKind>('pdf')
+  const [kind, setKind] = useState<ExportKind>(standaloneDev ? 'html' : 'pdf')
   const [notesAppendix, setNotesAppendix] = useState(false)
   const [showAllFindings, setShowAllFindings] = useState(false)
   const working =
@@ -93,7 +101,10 @@ export function ExportDialog({
   const findings = checkDeck(html, { availableAssets })
   const layoutFailed = verification.state === 'failed'
   const layoutChecking = verification.state === 'checking'
-  const blocked = hasBlockingFinding(findings) || layoutFailed
+  const blocked =
+    kind === 'html' && standaloneDev
+      ? hasBlockingFinding(findings)
+      : hasBlockingFinding(findings) || layoutFailed
   const blocking = findings.filter(finding => finding.severity === 'error')
   const warnings = findings.filter(finding => finding.severity === 'warning')
   const allFindings = [...blocking, ...warnings]

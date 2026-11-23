@@ -519,7 +519,7 @@ export function slideScript(slideIndex: number, step: number): string {
     if (!forwardKeyboard || event.defaultPrevented) return;
     var target = event.target;
     if (target && target.closest && target.closest('input, textarea, select, [contenteditable]')) return;
-    if (!/^(?:[0-9]|Enter|ArrowRight|ArrowLeft|PageDown|PageUp|Home|End|Escape| |n|p|b|s|a|r|\\.)$/.test(event.key)) return;
+    if (!/^(?:[0-9]|Enter|ArrowRight|ArrowLeft|PageDown|PageUp|Home|End|Escape| |n|p|b|w|l|g|s|a|r|\\.)$/i.test(event.key)) return;
     event.preventDefault();
     parent.postMessage({type:'pureslides:key',key:event.key}, '*');
   });
