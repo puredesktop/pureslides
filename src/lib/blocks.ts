@@ -97,6 +97,9 @@ function figure(value: string, text: string): string {
     </div>`
 }
 
+/** A truly empty slide canvas for starting from scratch without template copy. */
+export const BLANK_SLIDE_HTML = `<div data-slide data-block="blank" style="${FRAME}; justify-content: center; gap: 24px; ${PAD}"></div>`
+
 export const SLIDE_BLOCKS: SlideBlock[] = [
   {
     id: 'title',
@@ -163,7 +166,7 @@ export const SLIDE_BLOCKS: SlideBlock[] = [
     <h1 style="${HEADLINE}">The point, on the left</h1>
     <p style="${TEXT}; ${MUTED}">Two or three sentences that carry the argument. The picture is the evidence.</p>
   </div>
-  <div style="flex: 6; align-self: stretch; margin: 72px 0; border-radius: 4px; background: var(--slide-surface, #eaf0fb); display: grid; place-items: center; ${LABEL}; ${ACCENT}">Replace with an image</div>
+  <div data-image-slot style="flex: 6; align-self: stretch; margin: 72px 0; border-radius: 4px; background: var(--slide-surface, #eaf0fb); display: grid; place-items: center; ${LABEL}; ${ACCENT}">Replace with an image</div>
 </div>`,
   },
   {
@@ -172,7 +175,7 @@ export const SLIDE_BLOCKS: SlideBlock[] = [
     description: 'A picture edge to edge, with the words laid over it.',
     steps: 0,
     html: `<div data-slide data-block="image-full" style="position: absolute; inset: 0; background: #192338; color: #ffffff; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 0 76px">
-  <div data-bg style="position: absolute; inset: 0; background: #2a2a30; display: grid; place-items: center; color: #b8c8d8; ${LABEL}">Replace with an image</div>
+  <div data-image-slot data-bg style="position: absolute; inset: 0; background: #2a2a30; display: grid; place-items: center; color: #b8c8d8; ${LABEL}">Replace with an image</div>
   <div data-bg style="position: absolute; inset: 0; background: linear-gradient(to top, rgba(8,8,10,0.84) 0%, rgba(8,8,10,0) 58%)"></div>
   <div style="position: relative; padding: 0 96px; display: flex; flex-direction: column; gap: 16px">
     <h1 style="${HEADLINE}">Words over the picture</h1>
@@ -223,7 +226,7 @@ export const SLIDE_BLOCKS: SlideBlock[] = [
     <h1 style="${HEADLINE}">What it looks like</h1>
     <p style="${TEXT}; ${MUTED}">The one thing to notice in it.</p>
   </div>
-  <div style="flex: 1; min-height: 0; border: 1px solid var(--slide-line, #cdd6e6); border-radius: 6px; background: var(--slide-surface, #eaf0fb); display: grid; place-items: center; ${LABEL}; ${ACCENT}; overflow: hidden">Replace with an image</div>
+  <div data-image-slot style="flex: 1; min-height: 0; border: 1px solid var(--slide-line, #cdd6e6); border-radius: 6px; background: var(--slide-surface, #eaf0fb); display: grid; place-items: center; ${LABEL}; ${ACCENT}; overflow: hidden">Replace with an image</div>
 </div>`,
   },
   {

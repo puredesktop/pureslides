@@ -19,12 +19,10 @@ export interface FontWriter {
   listFiles: (path: string) => Promise<unknown>
 }
 
-const written = new Set<string>()
-
 /** The files written now (empty when the package already had them all). */
 export async function writeDeckFonts(packagePath: string, html: string, io: FontWriter): Promise<string[]> {
   const root = packagePath.replace(/\/+$/, '')
-  const wanted = deckFontFiles(html).filter(file => BUNDLED_FONT_URLS[file] && !written.has(`${root}/${file}`))
+  const wanted = deckFontFiles(html).filter(file => Object.hasOwn(BUNDLED_FONT_URLS, file))
   if (!wanted.length) return []
   const dir = `${root}/${DECK_ASSETS_DIR}/${FONT_DIR}`
   let present = new Set<string>()
@@ -50,7 +48,6 @@ export async function writeDeckFonts(packagePath: string, html: string, io: Font
       await io.writeBinaryFile(`${dir}/${name}`, BUNDLED_FONT_URLS[file].replace(/^data:[^,]*,/, ''))
       out.push(file)
     }
-    written.add(`${root}/${file}`)
   }
   return out
 }

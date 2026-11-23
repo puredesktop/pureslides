@@ -1,6 +1,6 @@
 import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
-import { base64Of, buildDeckPptx, pptxLayout } from './deckPptx'
+import { appendSnippetToSlide, base64Of, buildDeckPptx, buildEditableDeckPptx, extractSlideHtmlList, pptxLayout } from './deckPptx'
 
 // A 2×1 PNG, enough for the writer to embed.
 const PNG =
@@ -64,5 +64,50 @@ describe('the deck as PowerPoint', () => {
     const emu = (inches: number): string => String(Math.round(inches * 914400))
     expect(slide).toContain(`<a:off x="${emu(13.333 * 0.25)}" y="${emu(7.5 * 0.5)}"/>`)
     expect(slide).toContain(`<a:ext cx="${emu(13.333 * 0.5)}" cy="${emu(7.5 * 0.25)}"/>`)
+  })
+
+  it('builds a native editable .pptx with real text boxes, KPI cards, native tables, and speaker notes', async () => {
+    const base64 = await buildEditableDeckPptx({
+      title: 'Q4 Board Deck',
+      width: 1280,
+      height: 720,
+      look: 'signal',
+      slides: [
+        {
+          html: `<section data-slide><div class="kicker">Q4 Summary</div><h1>Revenue grew 42% YoY</h1><div class="stat"><strong>$4.8M</strong><span>ARR</span></div><ul><li>Expanded to 318 orgs</li><li>126% NRR</li></ul></section>`,
+          notes: 'Emphasize enterprise retention.',
+        },
+        {
+          html: `<section data-slide><h2>Regional Breakdown</h2><table><thead><tr><th>Region</th><th>Q4</th></tr></thead><tbody><tr><td>North America</td><td>$2.45M</td></tr></tbody></table></section>`,
+        },
+      ],
+    })
+    const zip = await JSZip.loadAsync(Buffer.from(base64, 'base64'))
+    const slide1 = await zip.file('ppt/slides/slide1.xml')!.async('string')
+    const slide2 = await zip.file('ppt/slides/slide2.xml')!.async('string')
+    const notes1 = await zip.file('ppt/notesSlides/notesSlide1.xml')!.async('string')
+    expect(slide1).toContain('Revenue grew 42% YoY')
+    expect(slide1).toContain('$4.8M')
+    expect(slide1).toContain('Expanded to 318 orgs')
+    expect(slide2).toContain('<a:tbl>')
+    expect(slide2).toContain('North America')
+    expect(notes1).toContain('Emphasize enterprise retention.')
+  })
+
+  it('appends live-data snippets inside div and section slides without corrupting dollar signs', () => {
+    const divDeck =
+      '<!DOCTYPE html><html><body><div id="deck" data-deck-id="d1"><div data-slide><h1>One</h1></div><div data-slide><h1>Two</h1></div></div></body></html>'
+    const updatedDiv = appendSnippetToSlide(divDeck, 1, '<div class="stat"><strong>$4.8M $&</strong></div>')
+    const divSlides = extractSlideHtmlList(updatedDiv)
+    expect(divSlides).toHaveLength(2)
+    expect(divSlides[0]).not.toContain('$4.8M')
+    expect(divSlides[1]).toContain('$4.8M $&amp;')
+
+    const sectionDeck =
+      '<!DOCTYPE html><html><body><div id="deck" data-deck-id="d2"><section data-slide><h1>Sec</h1></section></div></body></html>'
+    const updatedSec = appendSnippetToSlide(sectionDeck, 0, '<p>$100</p>')
+    const secSlides = extractSlideHtmlList(updatedSec)
+    expect(secSlides).toHaveLength(1)
+    expect(secSlides[0]).toContain('<p>$100</p>')
   })
 })

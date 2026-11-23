@@ -14,7 +14,13 @@
  * (filler, against the suite's copy rule) is checked in `copyCheck`, as a warning.
  */
 import { copyFindings } from './copyCheck'
+import { referencedAssetNames } from './packageAssets'
 import { typographyFindings } from './typeCheck'
+
+export interface CheckDeckOptions {
+  /** Asset names currently present under `assets/` in the package, for missing-media checks. */
+  availableAssets?: readonly string[]
+}
 
 export type CheckSeverity = 'error' | 'warning'
 
@@ -40,11 +46,14 @@ function stripStringsAndComments(source: string): string {
     .replace(/"(?:[^"\\]|\\.)*"/g, '""')
 }
 
-export function checkDeck(html: string): CheckFinding[] {
+const REMOTE_URL = /^(?:https?:)?\/\//i
+
+export function checkDeck(html: string, options: CheckDeckOptions = {}): CheckFinding[] {
   const findings: CheckFinding[] = []
   if (typeof DOMParser === 'undefined') return findings
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const root = doc.querySelector('[data-deck-id]') ?? doc.querySelector('#deck')
+  const availableSet = options.availableAssets ? new Set(options.availableAssets) : null
 
   if (!root) {
     return [
@@ -72,12 +81,13 @@ export function checkDeck(html: string): CheckFinding[] {
   slides.forEach((slide, index) => {
     // A build that skips a number has a press that does nothing.
     const steps = [...slide.querySelectorAll('[data-step]')]
-      .map(node => Number(node.getAttribute('data-step')))
+      .map(node => Math.floor(Number(node.getAttribute('data-step'))))
       .filter(step => Number.isFinite(step) && step > 0)
       .sort((a, b) => a - b)
     const unique = [...new Set(steps)]
-    unique.forEach((step, order) => {
-      if (step !== order + 1) {
+    let previous = 0
+    for (const step of unique) {
+      if (step > previous + 1) {
         findings.push({
           severity: 'warning',
           code: 'step-gap',
@@ -86,10 +96,11 @@ export function checkDeck(html: string): CheckFinding[] {
           fix: 'number build steps from 1 with no gaps, or a press will do nothing',
         })
       }
-    })
+      previous = step
+    }
 
     const hasRemoteImage = [...slide.querySelectorAll('img[src]')].some(image =>
-      /^https?:/i.test(image.getAttribute('src') ?? ''),
+      REMOTE_URL.test(image.getAttribute('src') ?? ''),
     )
     if (hasRemoteImage) {
       findings.push({
@@ -99,6 +110,26 @@ export function checkDeck(html: string): CheckFinding[] {
         message: `slide ${index + 1} loads an image over the network`,
         fix: 'add the file with addAsset and reference it as assets/<name>',
       })
+    }
+
+    // Check for missing top-level package assets referenced on this slide
+    // (skipping nested subdirectories like fonts/ or motifs/ when availableAssets
+    // reflects flat top-level listings).
+    if (availableSet) {
+      const slideAssets = referencedAssetNames(slide.outerHTML).filter(
+        name => !name.includes('/'),
+      )
+      for (const name of slideAssets) {
+        if (!availableSet.has(name)) {
+          findings.push({
+            severity: 'warning',
+            code: 'missing-asset',
+            slide: index,
+            message: `slide ${index + 1} references missing media assets/${name}`,
+            fix: 'add the missing file in Files or replace the reference before presenting',
+          })
+        }
+      }
     }
 
     // A video slot with nothing in it shows its cover; a clip from the
@@ -116,7 +147,7 @@ export function checkDeck(html: string): CheckFinding[] {
         })
         continue
       }
-      if (/^https?:/i.test(clip)) {
+      if (REMOTE_URL.test(clip)) {
         findings.push({
           severity: 'warning',
           code: 'remote-video',
@@ -140,7 +171,7 @@ export function checkDeck(html: string): CheckFinding[] {
   findings.push(...copyFindings(slides))
 
   const head = doc.head?.innerHTML ?? ''
-  if (/<link[^>]+href=["']https?:/i.test(head)) {
+  if (/<link[^>]+href=["'](?:https?:)?\/\//i.test(head)) {
     findings.push({
       severity: 'warning',
       code: 'remote-font',
@@ -153,7 +184,7 @@ export function checkDeck(html: string): CheckFinding[] {
   // room's network may not honour, and the sandboxed renderers never will.
   if (
     [...doc.querySelectorAll('script[src]')].some(node =>
-      /^https?:/i.test(node.getAttribute('src') ?? ''),
+      REMOTE_URL.test(node.getAttribute('src') ?? ''),
     )
   ) {
     findings.push({

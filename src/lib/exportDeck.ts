@@ -39,8 +39,12 @@ import {
 import { checkDeck } from './checkDeck'
 import { hashDeck } from './deckDoor'
 import { geometryFromHtml } from './deckDocument'
-import { buildDeckPptx, type PptxVideo } from './deckPptx'
+import { buildDeckPptx, buildEditableDeckPptx, extractSlideHtmlList, type PptxVideo } from './deckPptx'
+import { lookFromHtml } from './deckLooks'
+import { buildPortableDeckHtml } from './portableDeckHtml'
+import type { PreviewAssetMap } from './packageAssets'
 import type { VideoPlacement } from './videoPlacements'
+import { escapeHtmlText, resolveSafePackageRelativePath } from './sanitizeDeck'
 import { SEEK_ENGINE, printScript, shownSlideHtml } from './slideSeek'
 import type { Slide } from './slides'
 
@@ -78,7 +82,7 @@ export interface ExportVerification {
   failedMessage: () => string
 }
 
-export type ExportKind = 'pdf' | 'images' | 'video' | 'pptx'
+export type ExportKind = 'pdf' | 'images' | 'video' | 'pptx' | 'pptx-editable' | 'html'
 
 export interface ExportProgressState {
   phase: 'idle' | 'preparing' | 'working' | 'done' | 'error'
@@ -110,6 +114,8 @@ export interface ExportRequest {
    * deck without video passes nothing.
    */
   videos?: VideoPlacement[]
+  /** Inlined asset previews for self-contained Portable HTML exports. */
+  previews?: PreviewAssetMap
 }
 
 export interface ExportResult {
@@ -180,6 +186,20 @@ export function printableHtml(
     // address a slide by its place among its siblings, and the frames show
     // the root with the other slides hidden — so does the page.
     const copy = root.cloneNode(true) as Element
+    // Avoid SVG <defs> id collisions from display:none inactive slides on
+    // earlier pages: Chromium resolves url(#id) to the first DOM match.
+    const copySlides = [...copy.children].filter(child => child.matches('[data-slide]'))
+    if (copySlides.length > 1) {
+      copySlides.forEach((slideEl, siblingIndex) => {
+        if (siblingIndex === index) return
+        for (const svg of slideEl.querySelectorAll('svg')) {
+          if (svg.hasAttribute('id')) svg.removeAttribute('id')
+          for (const identified of svg.querySelectorAll('[id]')) {
+            identified.removeAttribute('id')
+          }
+        }
+      })
+    }
     for (const video of copy.querySelectorAll('video')) {
       video.replaceWith(videoPlaceholder(doc, video))
     }
@@ -191,7 +211,7 @@ export function printableHtml(
   const appendix =
     options.notesAppendix && options.notes?.some(note => note.trim())
       ? `<section class="pv-page pv-notes"><h2>Speaker notes</h2><ol>${options.notes
-          .map(note => `<li>${note.trim() ? note : '—'}</li>`)
+          .map(note => `<li>${note.trim() ? escapeHtmlText(note) : '—'}</li>`)
           .join('')}</ol></section>`
       : ''
 
@@ -222,7 +242,9 @@ ${headStyles}
          root monolithic — one sheet, whole — and changes nothing about a
          root that already has an explicit size. */
       .pv-page > [data-deck-id] { contain: size; }
-      .pv-notes { padding: 64px; background: #ffffff; color: #1b1b1e;
+      .pv-page > #deck { contain: size; }
+      .pv-notes { box-sizing: border-box; height: auto; min-height: ${geometry.height}px;
+        overflow: visible; padding: 64px; background: #ffffff; color: #1b1b1e;
         font-family: Archivo, system-ui, sans-serif; }
       .pv-notes h2 { margin: 0 0 24px; font-size: 32px; }
       .pv-notes li { margin-bottom: 14px; font-size: 16px; line-height: 1.5; }
@@ -512,6 +534,23 @@ export async function exportDeck(request: ExportRequest): Promise<ExportResult> 
   // stemming from `document.title` named every deck's export the same.
   const stem = fileStem(title)
 
+  if (kind === 'html') {
+    report({ phase: 'working', unit: 0, unitCount: slides.length, message: 'Packaging Portable HTML…' })
+    const outputPath = `${exportsDir}/${stem}.html`
+    const portable = buildPortableDeckHtml(html, {
+      title,
+      previews: request.previews,
+    })
+    await writeTextFile(outputPath, portable)
+    report({
+      phase: 'done',
+      unit: slides.length,
+      message: `Wrote ${outputPath.split('/').pop()}.`,
+      outputPath,
+    })
+    return { kind, outputPath, units: slides.length }
+  }
+
   if (kind === 'pdf') {
     report({ phase: 'preparing', message: 'Laying out the pages…' })
     if (shouldCancel?.()) throw new ExportCancelled()
@@ -573,6 +612,33 @@ export async function exportDeck(request: ExportRequest): Promise<ExportResult> 
     return { kind, outputPath, units: slides.length, sheets, expectedSheets: expected }
   }
 
+  if (kind === 'pptx-editable') {
+    report({
+      phase: 'working',
+      unit: 0,
+      unitCount: slides.length,
+      message: 'Building editable PowerPoint slides…',
+    })
+    const slideHtmls = extractSlideHtmlList(html)
+    const base64 = await buildEditableDeckPptx({
+      title,
+      width: geometry.width,
+      height: geometry.height,
+      look: lookFromHtml(html) ?? undefined,
+      slides: slides.map((s, idx) => ({ html: slideHtmls[idx] ?? '', notes: s.notes })),
+    })
+    const outputPath = `${exportsDir}/${stem}-editable.pptx`
+    await writeBinaryFile(outputPath, base64)
+    report({
+      phase: 'done',
+      unit: slides.length,
+      unitCount: slides.length,
+      message: `Wrote editable ${outputPath.split('/').pop()}.`,
+      outputPath,
+    })
+    return { kind, outputPath, units: slides.length }
+  }
+
   // Images, PowerPoint and video all capture frames; they differ in which
   // instants: a still per slide at its last step, or the clock.
   const instants =
@@ -595,6 +661,12 @@ export async function exportDeck(request: ExportRequest): Promise<ExportResult> 
 
   const framePath = `${root}/.frame.html`
   const framesDir = `${exportsDir}/frames`
+  // Clear stale frames from any prior export so deleted slides do not linger.
+  try {
+    await deletePath(framesDir, true)
+  } catch {
+    /* nothing to clear */
+  }
   await createFolder(exportsDir, 'frames')
 
   let unsubscribe: (() => void) | null = null
@@ -619,6 +691,15 @@ export async function exportDeck(request: ExportRequest): Promise<ExportResult> 
       width: geometry.width,
       loadingMessage: `Capturing ${instants.length}`,
     })
+  } catch (error) {
+    if (kind !== 'images') {
+      try {
+        await deletePath(framesDir, true)
+      } catch {
+        /* ignore cleanup failure */
+      }
+    }
+    throw error
   } finally {
     unsubscribe?.()
     // The frozen-frame document is scaffolding; the frames or the video are
@@ -634,58 +715,80 @@ export async function exportDeck(request: ExportRequest): Promise<ExportResult> 
     // PowerPoint: one picture slide per frame, the board's verified render,
     // with the speaker notes attached as real notes. The frames were
     // scaffolding; the .pptx is the output.
-    if (shouldCancel?.()) throw new ExportCancelled()
-    report({ phase: 'working', unit: 0, unitCount: instants.length, message: 'Packing the slides…' })
-    const frames: Array<{ dataUrl: string; notes?: string; videos?: PptxVideo[] }> = []
-    const clips = new Map<string, Promise<{ base64: string; extn: string } | null>>()
-    const clipFor = (src: string): Promise<{ base64: string; extn: string } | null> => {
-      // Only a path inside the package is a file to read: never a data URL
-      // (the bytes are not a name) and never the network.
-      if (!src || /^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith('/')) return Promise.resolve(null)
-      let pending = clips.get(src)
-      if (!pending) {
-        pending = readBinaryBase64(`${root}/${src.replace(/^\.\//, '')}`, MAX_PPTX_VIDEO_BYTES)
-          .then(read => ({ base64: read.base64, extn: (src.split(/[?#]/)[0].split('.').pop() ?? 'mp4').toLowerCase() }))
-          .catch(() => null)
-        clips.set(src, pending)
-      }
-      return pending
-    }
-    const frameSize = captured ? deckFrameSize(captured, geometry) : geometry
-    for (const [index, instant] of instants.entries()) {
-      if (shouldCancel?.()) throw new ExportCancelled()
-      const raw = await readBinaryDataUrl(`${framesDir}/${frameFileName(index)}`)
-      const dataUrl = captured ? await frameToDeck(raw, captured, geometry) : raw
-      const videos: PptxVideo[] = []
-      for (const placement of (request.videos ?? []).filter(entry => entry.slide === instant.slide)) {
-        const clip = await clipFor(placement.src)
-        if (!clip) continue
-        // The picture underneath is the clip's first frame; a cover cut
-        // from it means nothing changes on screen when the clip starts.
-        const cover = await cropDataUrl(dataUrl, placement).catch(() => undefined)
-        videos.push({ ...clip, x: placement.x, y: placement.y, w: placement.w, h: placement.h, ...(cover ? { cover } : {}) })
-      }
-      frames.push({ dataUrl, notes: slides[instant.slide]?.notes, ...(videos.length ? { videos } : {}) })
-      report({ phase: 'working', unit: index + 1, unitCount: instants.length, message: `Packing slide ${index + 1} of ${instants.length}…` })
-    }
-    const base64 = await buildDeckPptx({
-      title,
-      width: frameSize.width,
-      height: frameSize.height,
-      frames,
-    })
-    const outputPath = `${exportsDir}/${stem}.pptx`
-    await writeBinaryFile(outputPath, base64)
     try {
-      await deletePath(framesDir, true)
-    } catch {
-      /* the file is written either way */
+      if (shouldCancel?.()) throw new ExportCancelled()
+      report({ phase: 'working', unit: 0, unitCount: instants.length, message: 'Packing the slides…' })
+      const frames: Array<{ dataUrl: string; notes?: string; videos?: PptxVideo[] }> = []
+      const clips = new Map<string, Promise<{ base64: string; extn: string } | null>>()
+      const clipFor = (src: string): Promise<{ base64: string; extn: string } | null> => {
+        // Only a safe relative path inside the package is readable: never a URL
+        // scheme, absolute path, or `..` traversal. Decode percent-encoded names
+        // and strip query/fragment markers before reading from disk.
+        const safeRel = resolveSafePackageRelativePath(src)
+        if (!safeRel) return Promise.resolve(null)
+        let pending = clips.get(safeRel)
+        if (!pending) {
+          pending = readBinaryBase64(`${root}/${safeRel}`, MAX_PPTX_VIDEO_BYTES)
+            .then(read => ({ base64: read.base64, extn: (safeRel.split('.').pop() ?? 'mp4').toLowerCase() }))
+            .catch(() => null)
+          clips.set(safeRel, pending)
+        }
+        return pending
+      }
+      const frameSize = captured ? deckFrameSize(captured, geometry) : geometry
+      for (const [index, instant] of instants.entries()) {
+        if (shouldCancel?.()) throw new ExportCancelled()
+        const raw = await readBinaryDataUrl(`${framesDir}/${frameFileName(index)}`)
+        const dataUrl = captured ? await frameToDeck(raw, captured, geometry) : raw
+        const videos: PptxVideo[] = []
+        for (const placement of (request.videos ?? []).filter(entry => entry.slide === instant.slide)) {
+          const clip = await clipFor(placement.src)
+          if (!clip) continue
+          // The picture underneath is the clip's first frame; a cover cut
+          // from it means nothing changes on screen when the clip starts.
+          const cover = await cropDataUrl(dataUrl, placement).catch(() => undefined)
+          videos.push({ ...clip, x: placement.x, y: placement.y, w: placement.w, h: placement.h, ...(cover ? { cover } : {}) })
+        }
+        frames.push({ dataUrl, notes: slides[instant.slide]?.notes, ...(videos.length ? { videos } : {}) })
+        report({ phase: 'working', unit: index + 1, unitCount: instants.length, message: `Packing slide ${index + 1} of ${instants.length}…` })
+      }
+      const base64 = await buildDeckPptx({
+        title,
+        width: frameSize.width,
+        height: frameSize.height,
+        frames,
+      })
+      const outputPath = `${exportsDir}/${stem}.pptx`
+      await writeBinaryFile(outputPath, base64)
+      report({ phase: 'done', unit: instants.length, message: `Wrote ${outputPath.split('/').pop()}.`, outputPath })
+      return { kind, outputPath, units: instants.length }
+    } finally {
+      try {
+        await deletePath(framesDir, true)
+      } catch {
+        /* the file is written or aborted either way */
+      }
     }
-    report({ phase: 'done', unit: instants.length, message: `Wrote ${outputPath.split('/').pop()}.`, outputPath })
-    return { kind, outputPath, units: instants.length }
   }
 
   if (kind === 'images') {
+    // Crop each captured slide image to the deck aspect when the renderer
+    // captured extra vertical dead space below the slide.
+    if (captured && deckFrameKeep(captured, geometry) <= 0.998) {
+      for (let index = 0; index < instants.length; index += 1) {
+        if (shouldCancel?.()) throw new ExportCancelled()
+        const imagePath = `${framesDir}/slide-${String(index).padStart(5, '0')}.png`
+        try {
+          const raw = await readBinaryDataUrl(imagePath)
+          const cropped = await frameToDeck(raw, captured, geometry)
+          if (cropped !== raw && cropped.startsWith('data:image/png;base64,')) {
+            await writeBinaryFile(imagePath, cropped.slice('data:image/png;base64,'.length))
+          }
+        } catch {
+          /* keep captured image as-is when canvas cropping is unavailable */
+        }
+      }
+    }
     // For an image export the frames ARE the artifact — they stay.
     report({
       phase: 'done',
@@ -699,7 +802,14 @@ export async function exportDeck(request: ExportRequest): Promise<ExportResult> 
   // Video: encode the captured frames into a real .mp4. When the runtime has
   // no encoder the frame sequence is kept and said plainly — an honest frame
   // folder beats silently producing nothing.
-  if (shouldCancel?.()) throw new ExportCancelled()
+  if (shouldCancel?.()) {
+    try {
+      await deletePath(framesDir, true)
+    } catch {
+      /* ignore */
+    }
+    throw new ExportCancelled()
+  }
   if (!canEncodeVideo()) {
     report({
       phase: 'done',
@@ -710,54 +820,60 @@ export async function exportDeck(request: ExportRequest): Promise<ExportResult> 
     return { kind, outputPath: framesDir, units: instants.length }
   }
 
-  report({
-    phase: 'working',
-    unit: 0,
-    unitCount: instants.length,
-    message: `Encoding ${instants.length} frames…`,
-  })
-  const encodeSize = captured ? deckFrameSize(captured, geometry) : geometry
-  const bytes = await encodeFramesToMp4(
-    instants.length,
-    async index => {
-      if (shouldCancel?.()) throw new ExportCancelled()
-      const raw = await readBinaryDataUrl(`${framesDir}/${frameFileName(index)}`)
-      return captured ? frameToDeck(raw, captured, geometry) : raw
-    },
-    {
-      width: encodeSize.width,
-      height: encodeSize.height,
-      fps: EXPORT_FPS,
-      onProgress: index => {
-        if (index % EXPORT_FPS === 0 || index === instants.length - 1) {
-          report({
-            phase: 'working',
-            unit: index + 1,
-            unitCount: instants.length,
-            message: `Encoding frame ${index + 1} of ${instants.length}…`,
-          })
-        }
-      },
-    },
-  )
-
-  const outputPath = `${exportsDir}/${stem}.mp4`
-  await writeBinaryFile(outputPath, base64FromBytes(bytes))
-
-  // The frames were scaffolding for the encode; the .mp4 is the output.
   try {
-    await deletePath(framesDir, true)
-  } catch {
-    /* the video is written either way */
-  }
+    report({
+      phase: 'working',
+      unit: 0,
+      unitCount: instants.length,
+      message: `Encoding ${instants.length} frames…`,
+    })
+    const rawSize = captured ? deckFrameSize(captured, geometry) : geometry
+    const encodeSize = {
+      width: Math.max(2, Math.floor(rawSize.width / 2) * 2),
+      height: Math.max(2, Math.floor(rawSize.height / 2) * 2),
+    }
+    const bytes = await encodeFramesToMp4(
+      instants.length,
+      async index => {
+        if (shouldCancel?.()) throw new ExportCancelled()
+        const raw = await readBinaryDataUrl(`${framesDir}/${frameFileName(index)}`)
+        return captured ? frameToDeck(raw, captured, geometry) : raw
+      },
+      {
+        width: encodeSize.width,
+        height: encodeSize.height,
+        fps: EXPORT_FPS,
+        onProgress: index => {
+          if (index % EXPORT_FPS === 0 || index === instants.length - 1) {
+            report({
+              phase: 'working',
+              unit: index + 1,
+              unitCount: instants.length,
+              message: `Encoding frame ${index + 1} of ${instants.length}…`,
+            })
+          }
+        },
+      },
+    )
 
-  report({
-    phase: 'done',
-    unit: instants.length,
-    message: `Wrote ${outputPath.split('/').pop()}.`,
-    outputPath,
-  })
-  return { kind, outputPath, units: instants.length }
+    const outputPath = `${exportsDir}/${stem}.mp4`
+    await writeBinaryFile(outputPath, base64FromBytes(bytes))
+
+    report({
+      phase: 'done',
+      unit: instants.length,
+      message: `Wrote ${outputPath.split('/').pop()}.`,
+      outputPath,
+    })
+    return { kind, outputPath, units: instants.length }
+  } finally {
+    // The frames were scaffolding for the encode; clean up on success, cancel, or error.
+    try {
+      await deletePath(framesDir, true)
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /**

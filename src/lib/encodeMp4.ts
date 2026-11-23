@@ -61,7 +61,9 @@ export async function encodeFramesToMp4(
   }
   if (frameCount <= 0) throw new Error('there are no frames to encode')
 
-  const { width, height, fps } = request
+  const width = Math.max(2, Math.floor(request.width / 2) * 2)
+  const height = Math.max(2, Math.floor(request.height / 2) * 2)
+  const { fps } = request
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
     video: { codec: 'avc', width, height },
@@ -76,37 +78,71 @@ export async function encodeFramesToMp4(
     },
   })
 
-  encoder.configure({
-    codec: avcCodecString(width, height),
-    width,
-    height,
-    bitrate: bitrateFor(width, height, fps),
-    framerate: fps,
-  })
-
-  const frameDuration = Math.round(1e6 / fps)
-  for (let index = 0; index < frameCount; index += 1) {
-    if (encoderError) throw encoderError
-    const response = await fetch(await loadFrame(index))
-    const bitmap = await createImageBitmap(await response.blob())
-    const videoFrame = new VideoFrame(bitmap, {
-      timestamp: index * frameDuration,
-      duration: frameDuration,
-    })
-    // A keyframe every two seconds keeps the file seekable in players.
-    encoder.encode(videoFrame, { keyFrame: index % (fps * 2) === 0 })
-    videoFrame.close()
-    bitmap.close()
-    request.onProgress?.(index)
-    // Let the encoder drain so long exports do not balloon memory.
-    if (encoder.encodeQueueSize > fps) {
-      await new Promise(resolve => setTimeout(resolve, 0))
+  let closed = false
+  const closeEncoder = (): void => {
+    if (closed) return
+    closed = true
+    try {
+      encoder.close()
+    } catch {
+      /* already closed */
     }
   }
 
-  await encoder.flush()
-  encoder.close()
-  if (encoderError) throw encoderError
+  try {
+    encoder.configure({
+      codec: avcCodecString(width, height),
+      width,
+      height,
+      bitrate: bitrateFor(width, height, fps),
+      framerate: fps,
+    })
+
+    const frameDuration = Math.round(1e6 / fps)
+    for (let index = 0; index < frameCount; index += 1) {
+      if (encoderError) throw encoderError
+      const response = await fetch(await loadFrame(index))
+      const rawBitmap = await createImageBitmap(await response.blob())
+      let bitmap = rawBitmap
+      if (rawBitmap.width !== width || rawBitmap.height !== height) {
+        try {
+          bitmap = await createImageBitmap(
+            rawBitmap,
+            0,
+            0,
+            Math.min(rawBitmap.width, width),
+            Math.min(rawBitmap.height, height),
+            { resizeWidth: width, resizeHeight: height, resizeQuality: 'high' },
+          )
+        } finally {
+          if (bitmap !== rawBitmap) rawBitmap.close()
+        }
+      }
+      let videoFrame: VideoFrame | null = null
+      try {
+        videoFrame = new VideoFrame(bitmap, {
+          timestamp: index * frameDuration,
+          duration: frameDuration,
+        })
+        // A keyframe every two seconds keeps the file seekable in players.
+        encoder.encode(videoFrame, { keyFrame: index % (fps * 2) === 0 })
+      } finally {
+        videoFrame?.close()
+        bitmap.close()
+      }
+      request.onProgress?.(index)
+      // Let the encoder drain so long exports do not balloon memory.
+      if (encoder.encodeQueueSize > fps) {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      }
+    }
+
+    await encoder.flush()
+    closeEncoder()
+    if (encoderError) throw encoderError
+  } finally {
+    closeEncoder()
+  }
 
   muxer.finalize()
 

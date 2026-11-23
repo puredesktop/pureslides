@@ -379,6 +379,24 @@ third of the visible text vanished and the request did not ask for
 anything to be removed — that is your cue to restore and redo the edit
 carrying the content forward.
 
+## Operations model — Functions, Core Tools & Extended Escape Hatch
+
+PureSlides exposes **19 operations** directly in `plugin.json` (down from 43 atomic tools, a 56% reduction) while keeping 100% of all 43 atomic tools reachable:
+
+1. **Composite App Functions (`fn_*`, 7 always exposed)** — prefer these first to replace 3–12 atomic round-trips in one call:
+   - `fn_deckOutlineAndBriefing` (read): full deck briefing (metadata, `hash`, active `aim`, look/brand posture, ordered slide outline with notes coverage, asset inventory, revision count, and health summary).
+   - `fn_scaffoldSlidesFromOutline` (write, requires `baseHash`): compile and append or replace token-styled slides from a `---`-separated Markdown outline or structured slide specs, returning the new `hash` and immediate lint findings.
+   - `fn_visualAndLayoutAudit` (read): 0–100 health score, grouped blocking errors and warnings, layout variety/repeated-run check, asset usage audit (unused content or misplaced references), and recommended auto-fixes.
+   - `fn_polishDeckThemeAndFixes` (write, requires `baseHash`): coordinated theme/custom look update (respecting house-style and reference guards), step-gap renumbering, trailing blank slide trimming, and slide layout remixing in one atomic pass.
+   - `fn_speakerNotesAndPacingReview` (read): speaker notes coverage, narrative arc, on-slide word density, build press counts, and estimated speaking duration (optionally checked against `targetMinutes`).
+   - `fn_batchUpdateSpeakerNotes` (write, requires `baseHash`): update speaker notes, headlines, support lines, or hold seconds across multiple slides in one validated batch with automatic hash chaining.
+   - `fn_exportReadinessCheck` (read): pre-flight gate for `pdf`, `pptx`, `images`, `video`, or `all` checking live layout verification, blocking lint errors, video codec caveats, and notes coverage before `exportDeck`.
+2. **Core Atomic Tools (9 always exposed)**: `getDeckContext`, `getSlide`, `addSlide`, `updateSlide`, `setSlideHtml`, `deleteSlide`, `viewSlide`, `saveDeck`, `exportDeck`.
+3. **Extended Specialist Tools (34 on-demand via 3 meta-tools)**:
+   - Call `discoverAppTools` (read) with `query`, `category`, or `names` to inspect any specialist tool (`createDeck`, `setDeck`, `listSlides`, `moveSlide`, `duplicateSlide`, `listBlocks`, `addBlock`, element tools, asset tools, look/motif/brand/organisation tools, drafting request tools, `checkDeck`, `setSelection`, `present`, `stopExport`, `listRevisions`, `restoreRevision`).
+   - Call read-only specialist tools with `callExtendedReadTool({ tool, arguments })`.
+   - Call mutating specialist tools with `callExtendedTool({ tool, arguments, confirmDestructive? })` (pass `confirmDestructive: true` after checking with the user for destructive tools such as `setDeck`, `deleteElement`, `cancelDrawerRequest`, `stopExport`, or `restoreRevision`).
+
 ## Reference mapping
 
 | Task | Tools |
@@ -434,3 +452,5 @@ Rules:
 - A teammate's or guest's answers reach you only once the owner presses Send to assistant.
 - No tool approves or submits for a person.
 - `setSlideHtml` keeps the slide's id, so its review carries on.
+
+**Asking first.** `present` is `write` and asks first: it takes over the person's screen.

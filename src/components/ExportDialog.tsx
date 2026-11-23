@@ -13,6 +13,8 @@ import { ACCENT } from '../constants'
 import { checkDeck, hasBlockingFinding } from '../lib/checkDeck'
 import { deckSeconds } from '../lib/deckDocument'
 import type { DeckVerification } from '../lib/deckVerification'
+import { canEncodeVideo } from '../lib/encodeMp4'
+import { containDialogFocus } from './dialogFocus'
 import type { ExportKind, ExportProgressState } from '../types'
 import type { Slide } from '../lib/slides'
 
@@ -21,6 +23,8 @@ interface ExportDialogProps {
   onClose: () => void
   html: string
   slides: Slide[]
+  /** Asset names currently present under `assets/` in the package, for missing-media checks. */
+  availableAssets?: readonly string[]
   progress: ExportProgressState
   lastExportPath: string | null
   /**
@@ -31,9 +35,18 @@ interface ExportDialogProps {
   onExport: (kind: ExportKind, notesAppendix: boolean) => void
   onCancel: () => void
   onReveal: (path: string) => void
+  /** Jump directly to a slide with a warning or layout failure. */
+  onSelectSlide?: (slideIndex: number) => void
+  /** Optional direct Portable HTML browser download (used in standalone dev mode). */
+  standaloneDev?: boolean
 }
 
 const KINDS: { id: ExportKind; label: string; note: string }[] = [
+  {
+    id: 'html',
+    label: 'Portable HTML',
+    note: 'One self-contained .html presentation with built-in keyboard, touch, grid, blackout, whiteout, and fullscreen player. Zero dependencies — works offline anywhere.',
+  },
   {
     id: 'pdf',
     label: 'PDF',
@@ -41,9 +54,14 @@ const KINDS: { id: ExportKind; label: string; note: string }[] = [
   },
   { id: 'images', label: 'Images', note: 'Every slide as a PNG, numbered.' },
   {
+    id: 'pptx-editable',
+    label: 'PowerPoint (Editable)',
+    note: 'Native editable PowerPoint (.pptx) with real text boxes, bullets, KPI cards, tables, and speaker notes — open and edit directly in PowerPoint, Keynote, or Google Slides.',
+  },
+  {
     id: 'pptx',
-    label: 'PowerPoint',
-    note: 'One picture slide per slide, exactly as the board shows it, speaker notes attached, and every video placed as a real clip that plays. Opens in PowerPoint, Keynote and Google Slides; the text is a picture, not type.',
+    label: 'PowerPoint (Exact Pixel)',
+    note: 'One picture slide per slide, pixel-identical to the board, with speaker notes and playable videos overlaid.',
   },
   {
     id: 'video',
@@ -57,20 +75,25 @@ export function ExportDialog({
   onClose,
   html,
   slides,
+  availableAssets,
   progress,
   lastExportPath,
   verification,
   onExport,
   onCancel,
   onReveal,
+  onSelectSlide,
+  standaloneDev = false,
 }: ExportDialogProps): React.ReactElement | null {
-  const [kind, setKind] = useState<ExportKind>('pdf')
+  const [kind, setKind] = useState<ExportKind>(standaloneDev ? 'html' : 'pdf')
   const [notesAppendix, setNotesAppendix] = useState(false)
+  const [showAllFindings, setShowAllFindings] = useState(false)
   const working =
     progress.phase === 'preparing' || progress.phase === 'working'
 
   useEffect(() => {
     if (!open) return
+    setShowAllFindings(false)
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose()
     }
@@ -80,19 +103,38 @@ export function ExportDialog({
 
   if (!open) return null
 
-  const findings = checkDeck(html)
+  const findings = checkDeck(html, { availableAssets })
   const layoutFailed = verification.state === 'failed'
   const layoutChecking = verification.state === 'checking'
-  const blocked = hasBlockingFinding(findings) || layoutFailed
+  const blocked =
+    (kind === 'html' || kind === 'pptx-editable') && standaloneDev
+      ? hasBlockingFinding(findings)
+      : hasBlockingFinding(findings) || layoutFailed
   const blocking = findings.filter(finding => finding.severity === 'error')
   const warnings = findings.filter(finding => finding.severity === 'warning')
+  const allFindings = [...blocking, ...warnings]
+  const visibleFindings = showAllFindings ? allFindings : allFindings.slice(0, 4)
+  const hiddenFindingsCount = Math.max(0, allFindings.length - visibleFindings.length)
   const hasNotes = slides.some(slide => slide.notes.trim())
   const runtime = deckSeconds(slides.map(slide => slide.seconds))
+  const videoEncoderAvailable = canEncodeVideo()
+  const justExported = progress.phase === 'done' && Boolean(progress.outputPath)
   const output = (progress.phase === 'done' && progress.outputPath) || lastExportPath
+
+  const jumpToSlide = (slideIndex: number): void => {
+    onSelectSlide?.(slideIndex)
+    onClose()
+  }
 
   return (
     <Scrim onClick={working ? undefined : onClose}>
-      <Dialog onClick={event => event.stopPropagation()}>
+      <Dialog
+        role="dialog"
+        aria-modal="true"
+        aria-label="Export deck"
+        onKeyDown={containDialogFocus}
+        onClick={event => event.stopPropagation()}
+      >
         <Head>
           <Title>Export</Title>
           <span style={{ flex: 1 }} />
@@ -115,7 +157,7 @@ export function ExportDialog({
                 <ChoiceLabel>{option.label}</ChoiceLabel>
                 <ChoiceNote>
                   {option.id === 'video'
-                    ? `${option.note} Runs ${runtime}s in all.`
+                    ? `${option.note} Runs ${runtime}s in all.${videoEncoderAvailable ? '' : ' Note: this runtime has no MP4 encoder, so it exports a PNG frame sequence.'}`
                     : option.note}
                 </ChoiceNote>
               </ChoiceText>
@@ -154,13 +196,46 @@ export function ExportDialog({
               : layoutChecking
                 ? ' — every slide is measured again, in a frame with its fonts loaded, before anything is written.'
                 : ' — every slide measured cleanly with its fonts loaded.'}
+            {layoutFailed && onSelectSlide && verification.failedSlides.length ? (
+              <JumpLinks>
+                {verification.failedSlides.map(slideIdx => (
+                  <JumpButton
+                    key={slideIdx}
+                    type="button"
+                    onClick={() => jumpToSlide(slideIdx)}
+                  >
+                    Go to slide {slideIdx + 1}
+                  </JumpButton>
+                ))}
+              </JumpLinks>
+            ) : null}
           </Finding>
-          {blocking.length || warnings.length ? (
-            [...blocking, ...warnings].slice(0, 4).map(finding => (
-              <Finding key={`${finding.code}-${finding.slide ?? 'deck'}`} $error={finding.severity === 'error'}>
-                <strong>{finding.message}</strong> — {finding.fix}
-              </Finding>
-            ))
+          {allFindings.length ? (
+            <>
+              {visibleFindings.map((finding, index) => (
+                <Finding
+                  key={`${finding.code}-${finding.slide ?? 'deck'}-${index}`}
+                  $error={finding.severity === 'error'}
+                >
+                  <div>
+                    <strong>{finding.message}</strong> — {finding.fix}
+                  </div>
+                  {finding.slide !== undefined && onSelectSlide ? (
+                    <JumpButton
+                      type="button"
+                      onClick={() => jumpToSlide(finding.slide!)}
+                    >
+                      Go to slide {finding.slide + 1}
+                    </JumpButton>
+                  ) : null}
+                </Finding>
+              ))}
+              {hiddenFindingsCount > 0 ? (
+                <GhostButton type="button" onClick={() => setShowAllFindings(true)}>
+                  Show {hiddenFindingsCount} more {hiddenFindingsCount === 1 ? 'finding' : 'findings'}
+                </GhostButton>
+              ) : null}
+            </>
           ) : (
             <Note>Nothing here will surprise you on the page.</Note>
           )}
@@ -203,9 +278,10 @@ export function ExportDialog({
 
         {output && !working ? (
           <Section>
-            <SectionHead>Last export</SectionHead>
+            <SectionHead>{justExported ? 'Exported' : 'Last export'}</SectionHead>
+            {justExported && progress.message ? <Note>{progress.message}</Note> : null}
             <Row>
-              <Mono>{output.split('/').pop()}</Mono>
+              <Mono title={output}>{output.split('/').pop()}</Mono>
               <span style={{ flex: 1 }} />
               <GhostButton type="button" onClick={() => onReveal(output)}>
                 Reveal in Files
@@ -389,4 +465,23 @@ const Row = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
+`
+
+const JumpLinks = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+`
+
+const JumpButton = styled.button`
+  margin-top: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--platform-colors-border);
+  border-radius: 0;
+  background: var(--platform-colors-surface);
+  color: ${ACCENT};
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
 `

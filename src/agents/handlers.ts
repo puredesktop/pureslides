@@ -17,7 +17,8 @@ import {
   geometryFromHtml,
 } from '../lib/deckDocument'
 import type { DeckEditResult } from '../lib/deckDoor'
-import { slidesFromHtml } from '../lib/slides'
+import { elementAtPath, slideElementAt, slidesFromHtml } from '../lib/slides'
+import { isSafeAssetFileName } from '../lib/sanitizeDeck'
 import type { AssetRole } from '../lib/assetNotes'
 import type { DeckAgentToolContext, EditOptions } from './catalog'
 import { DECK_LOOKS, deckLook } from '../lib/deckLooks'
@@ -310,6 +311,12 @@ export function setDeckHandler(
   }
   const width = args.width === undefined ? undefined : Number(args.width)
   const height = args.height === undefined ? undefined : Number(args.height)
+  if (width !== undefined && (!Number.isFinite(width) || width <= 0 || width > 10000)) {
+    return agentToolErrorContent('width must be a finite positive number (1–10000)')
+  }
+  if (height !== undefined && (!Number.isFinite(height) || height <= 0 || height > 10000)) {
+    return agentToolErrorContent('height must be a finite positive number (1–10000)')
+  }
   const result = context.applyDeck(
     html,
     width || height ? { ...(width ? { width } : {}), ...(height ? { height } : {}) } : undefined,
@@ -327,9 +334,10 @@ export function addSlideHandler(
   if (!html || !html.startsWith('<')) {
     return agentToolErrorContent('html must be a single element carrying data-slide')
   }
+  const slides = slidesFromHtml(context.document.html)
   const at = args.atIndex === undefined ? undefined : Number(args.atIndex)
-  if (at !== undefined && (!Number.isInteger(at) || at < 0)) {
-    return agentToolErrorContent('atIndex must be a slide number')
+  if (at !== undefined && (!Number.isInteger(at) || at < 0 || at > slides.length)) {
+    return agentToolErrorContent(`atIndex must be between 0 and ${slides.length}`)
   }
   return landed(context.slideOps.add(html, at, editOptions(args)), { added: true, atIndex: at ?? 'end' })
 }
@@ -418,6 +426,16 @@ function elementArgs(
       'path must be a chain of child indexes such as "0.2" — getDeckContext reports the ones the author picked',
     )
   }
+  if (path && typeof DOMParser !== 'undefined') {
+    const doc = new DOMParser().parseFromString(context.document.html, 'text/html')
+    const root = doc.querySelector('[data-deck-id]') ?? doc.querySelector('#deck')
+    const slide = root ? slideElementAt(root, index) : null
+    if (slide && !elementAtPath(slide, path)) {
+      return agentToolErrorContent(
+        `no element at path "${path}" on slide ${index + 1} — call getSlide to inspect its children`,
+      )
+    }
+  }
   return { index, path }
 }
 
@@ -477,7 +495,7 @@ export async function addAssetHandler(
     return agentToolErrorContent('there is no deck open — create one first')
   }
   const name = readAgentToolStringArg(args, 'name')?.trim()
-  if (name && /[\\/]/.test(name)) {
+  if (name && !isSafeAssetFileName(name)) {
     return agentToolErrorContent(
       'name must be a file name, not a path — assets live directly in assets/',
     )
@@ -826,12 +844,13 @@ export function addBlockHandler(
 ): AgentToolHandlerResult {
   const blockId = readAgentToolStringArg(args, 'blockId')?.trim()
   if (!blockId) return agentToolErrorContent('blockId is required')
+  const slides = slidesFromHtml(context.document.html)
   const at = args.atIndex === undefined ? undefined : Number(args.atIndex)
-  if (at !== undefined && (!Number.isInteger(at) || at < 0)) {
-    return agentToolErrorContent('atIndex must be a slide number')
+  if (at !== undefined && (!Number.isInteger(at) || at < 0 || at > slides.length)) {
+    return agentToolErrorContent(`atIndex must be between 0 and ${slides.length}`)
   }
   const asset = readAgentToolStringArg(args, 'asset')?.trim()
-  if (asset && /[\/]/.test(asset)) {
+  if (asset && !isSafeAssetFileName(asset)) {
     return agentToolErrorContent(
       'asset must be a file name inside assets/, not a path — addAsset the clip first, then name it here',
     )

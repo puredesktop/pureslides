@@ -43,5 +43,5 @@ export function deckFromLive(live: Record<string, unknown>, fallbackTitle: strin
   const shell = typeof live.shell === 'string' ? live.shell : null
   if (!shell) return null
   const slides = Array.isArray(live.slides) ? (live.slides as Array<{ html?: unknown }>).map(s => (typeof s.html === 'string' ? s.html : '')).join('\n') : ''
-  return { title: typeof live.title === 'string' ? live.title : fallbackTitle, html: shell.replace(`<!--${MARKER}-->`, slides) }
+  return { title: typeof live.title === 'string' ? live.title : fallbackTitle, html: shell.replace(`<!--${MARKER}-->`, () => slides) }
 }
